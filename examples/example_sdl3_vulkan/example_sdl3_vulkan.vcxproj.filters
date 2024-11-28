@@ -34,6 +34,9 @@
     <ClCompile Include="..\..\imgui_tables.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\misc\freetype\imgui_freetype.cpp">
+      <Filter>imgui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imconfig.h">
@@ -50,6 +53,9 @@
     </ClInclude>
     <ClInclude Include="..\..\backends\imgui_impl_vulkan.h">
       <Filter>sources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\misc\freetype\imgui_freetype.h">
+      <Filter>imgui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
