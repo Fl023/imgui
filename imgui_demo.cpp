@@ -340,6 +340,368 @@ struct ImGuiDemoWindowData
     ~ImGuiDemoWindowData() { if (DemoTree) ExampleTree_DestroyNode(DemoTree); }
 };
 
+enum FontDemoBuildMode
+{
+    FontDemoBuildMode_Stb,
+    FontDemoBuildMode_FreeType
+};
+
+struct FontDemoData
+{
+#ifdef IMGUI_ENABLE_FREETYPE
+    FontDemoBuildMode   BuildMode = FontDemoBuildMode_FreeType;
+#else
+    FontDemoBuildMode   BuildMode = FontDemoBuildMode_Stb;
+#endif
+    float               GlobalScale = 1.0f;
+    float               WindowScale = 1.0f;
+    bool                SlowDown = false;
+
+    // ImFontConfig
+    int                 OversampleH = 0, OversampleV = 0;
+    float               RasterizerMultiply = 1.0f;
+    float               RasterizerDensity = 1.0f;
+    float               PackNodesFactor = 1.0f;
+    int                 FreeTypeBuilderFlags = 0;
+    ImVector<int>       CustomRects;
+};
+
+static FontDemoData GFontDemoData;
+
+#ifdef _WIN32
+#include <Windows.h> // Sleep
+#endif
+#include "imgui_internal.h"
+
+#ifdef IMGUI_ENABLE_FREETYPE
+#include "misc/freetype/imgui_freetype.h"
+#endif
+
+void LoadFonts(float scale);
+void LoadFonts(float scale)
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    // (1)
+    io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 16.0f * scale);
+    {
+        //static ImWchar ranges[] = { 0x1, 0x1FFFF, 0 };
+        ImFontConfig cfg;
+        //cfg.OversampleH = cfg.OversampleV = 1;
+        cfg.MergeMode = true;
+#ifdef IMGUI_ENABLE_FREETYPE
+        cfg.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
+#endif
+        io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\seguiemj.ttf", 16.0f * scale, &cfg);// , ranges);
+        //io.Fonts->AddFontFromFileTTF("../../misc/fonts/NotoColorEmoji.ttf", 16.0f, &cfg, ranges);
+    }
+    {
+        ImFontConfig cfg;
+        cfg.MergeMode = true;
+        io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 16.0f * scale, &cfg);
+    }
+
+    // (2)
+    {
+        ImFontConfig cfg_main;
+        //cfg.OversampleH = 1;
+        ImFont* font_main = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f * scale, &cfg_main);
+        IM_UNUSED(font_main);
+
+        ImFontConfig cfg_icon;
+        cfg_icon.MergeMode = true;
+        cfg_icon.OversampleH = 1;
+        ImFont* font_icon = io.Fonts->AddFontFromFileTTF("../../../fonts/fa-solid-900.ttf", 18.0f * scale, &cfg_icon);
+        IM_UNUSED(font_icon);
+    }
+
+    io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 17.0f * scale);// , nullptr, io.Fonts->GetGlyphRangesJapanese());
+
+    io.Fonts->AddFontDefault();
+    io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f * scale);
+    io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f * scale);
+    io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f * scale);
+    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f * scale);
+
+#ifdef IMGUI_ENABLE_FREETYPE_LUNASVG
+    {
+        static ImFontConfig cfg;
+        static ImWchar full_ranges[] = { 1, 0xFFFFF, 0 };
+        //cfg.OversampleH = cfg.OversampleV = 1;
+        cfg.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
+        io.Fonts->AddFontFromFileTTF("../../../fonts/TwitterColorEmoji-SVGinOT.ttf", 16.0f * scale, &cfg, full_ranges);
+    }
+#endif
+}
+
+/*
+static void ClearFonts(FontDemoData* data)
+{
+    //ImGuiIO& io = ImGui::GetIO();
+    //ImFontAtlas* atlas = io.Fonts;
+    //io.FontDefault = NULL;
+    //atlas->ClearFonts();
+    LoadFonts(data);
+}
+*/
+
+//#include "../../fonts/IconsFontAwesome6.h"
+
+static void ChangeFontSize(ImFont* font, float size)
+{
+    float ratio = size / font->FontSize;
+    font->FontSize = size;
+    for (int cfg_n = 0; cfg_n < font->SourcesCount; cfg_n++)
+    {
+        ImFontConfig* cfg = &font->Sources[cfg_n];
+        if (cfg_n == 0)
+            cfg->SizePixels = size;
+        else
+            cfg->SizePixels *= ratio;
+    }
+}
+
+#include "../../fonts/IconsFontAwesome6.h"
+
+static void ShowTexUpdateDebugWindow()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    ImFontAtlas* atlas = io.Fonts;
+    FontDemoData* data = &GFontDemoData;
+
+    /*
+    // Splitter test
+    ImGui::Begin("Spl");
+    ImGui::Text("H");
+    ImGui::GetWindowDrawList()->ChannelsSplit(3);
+    ImGui::Text("0000");
+    ImGui::GetWindowDrawList()->ChannelsSetCurrent(1);
+    ImGui::Text("1111");
+    */
+
+    ImGui::Begin("Font Test");
+
+    ImGui::Text("This is some useful text.");
+
+    ImGui::Text("Missing: \xF3\xBF\xBF\xBF");
+    ImGui::SameLine(0, 0);
+    ImGui::Text("...");
+
+    ImGui::Text("Hiragana: \xe3\x81\x8b\xe3\x81\x8d\xe3\x81\x8f\xe3\x81\x91\xe3\x81\x93 (kakikukeko)");
+    ImGui::Text("Kanjis: \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e (nihongo)");
+
+    ImGui::Text("ABC \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e");    // Nihongo
+    ImGui::Text("\tTAB");
+
+    ImGui::Text("\xf0\x9f\x8d\x89 \xf0\x9f\x8d\x8a \xf0\x9f\x8d\x8b"); // Fruits
+    ImGui::Text("\xef\x84\x9b"); // == ICON_FA_GAMEPAD
+
+    ImGui::End();
+
+    ImGui::Begin("Texture Update Debug");
+    ImGui::SetWindowFontScale(data->WindowScale); // FIXME: Old API
+
+    bool want_rebuild = false;
+    ImGui::ShowFontSelector("Fonts");
+
+    if (ImGui::Button("Add x2"))
+    {
+        ImFontConfig cfg;
+        cfg.OversampleH = data->OversampleH;
+        cfg.OversampleV = data->OversampleV;
+        float size = atlas->Fonts.back()->FontSize * 2.0f;
+        atlas->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", size, &cfg);
+    }
+
+    ImGui::SeparatorText("Current font");
+
+    ImFont* font_current = ImGui::GetFont();
+    ImGui::Text("Current: '%s'", font_current->GetDebugName());
+    float font_current_size = font_current->FontSize;
+    //ImGui::PushFont(font_icon);
+    if (ImGui::DragFloat("FontSize", &font_current_size, 0.1f, 1.0f, 128.0f, "%.0f"))
+    {
+        //print_times = 4;
+        ChangeFontSize(font_current, font_current_size);
+        atlas->ClearCache(); // FIXME: Clear cache for this font
+    }
+    /*if (print_times > 0)
+    {
+        IMGUI_DEBUG_LOG("%.3f ms/frame\n", io.DeltaTime * 1000.0f);
+        print_times--;
+    }*/
+
+    ImGui::SeparatorText("Shared settings");
+
+#ifdef IMGUI_ENABLE_STB_TRUETYPE
+    const bool has_stb_truetype = true;
+#else
+    const bool has_stb_truetype = false;
+#endif
+#ifdef IMGUI_ENABLE_FREETYPE
+    const bool has_freetype = true;
+#else
+    const bool has_freetype = false;
+#endif
+
+    /*if (ImGui::DragFloat("GlobalScale", &data->GlobalScale, 0.05f, 0.5f, 4.0f))
+    {
+        //atlas->ClearFonts();
+        //LoadFonts(data);
+    }*/
+
+    ImGui::BeginDisabled(data->BuildMode != FontDemoBuildMode_Stb);
+    want_rebuild |= ImGui::SliderInt2("Oversample", &data->OversampleH, 0, 3);
+    ImGui::EndDisabled();
+    want_rebuild |= ImGui::DragInt("TexGlyphPadding", &atlas->TexGlyphPadding, 0.1f, 0, 16);
+    want_rebuild |= ImGui::DragFloat("RasterizerMultiply", &data->RasterizerMultiply, 0.001f, 0.0f, 2.0f);
+    want_rebuild |= ImGui::DragFloat("RasterizerDensity", &data->RasterizerDensity, 0.001f, 0.0f, 4.0f, "%.1f");
+    //want_rebuild |= ImGui::DragFloat("PackNodesFactor", &data->PackNodesFactor, 0.001f, 0.1f, 1.0f, "%.1f");
+    //want_rebuild |= ImGui::DragFloat("WindowScale", &data->WindowScale, 0.05f, 0.5f, 4.0f);
+    ImGui::BeginDisabled(!has_stb_truetype);
+    want_rebuild |= ImGui::RadioButton("Stb", (int*)&data->BuildMode, FontDemoBuildMode_Stb);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!has_freetype);
+    want_rebuild |= ImGui::RadioButton("FreeType", (int*)&data->BuildMode, FontDemoBuildMode_FreeType);
+    ImGui::EndDisabled();
+
+    // Toy with legacy AddCustomRectXXX api
+    if (ImGui::TreeNode("Custom Rect API"))
+    {
+        ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+        if (ImGui::Button("Add Custom Rect"))
+        {
+            const int r_idx = atlas->AddCustomRectRegular(10, 10);
+            const ImFontAtlasCustomRect* r = atlas->GetCustomRectByIndex(r_idx);
+            unsigned char* pixels = atlas->TexData->GetPixelsAt(r->X, r->Y);
+
+            ImU32 col = 0;
+            switch (data->CustomRects.Size & 3)
+            {
+            case 0: col = IM_COL32(255, 0, 0, 255); break;
+            case 1: col = IM_COL32(0, 255, 0, 255); break;
+            case 2: col = IM_COL32(0, 0, 255, 255); break;
+            case 3: col = IM_COL32(255, 0, 255, 255); break;
+            }
+            data->CustomRects.push_back(r_idx);
+            for (int y = 0; y < r->Height; y++)
+            {
+                for (int x = 0; x < r->Height; x++)
+                    ((ImU32*)pixels)[x] = col;
+                pixels += atlas->TexData->GetPitch();
+            }
+        }
+        for (int r_idx : data->CustomRects)
+        {
+            const ImFontAtlasCustomRect* r = atlas->GetCustomRectByIndex(r_idx);
+            ImVec2 uv_min, uv_max;
+            atlas->CalcCustomRectUV(r, &uv_min, &uv_max);
+            ImGui::BulletText("CustomRect id %04d", r_idx);
+            ImGui::SameLine();
+            ImGui::Image(atlas->TexID, ImVec2(r->Width, r->Height), uv_min, uv_max);
+        }
+
+        ImGui::PopItemFlag();
+        ImGui::TreePop();
+    }
+
+#ifdef IMGUI_ENABLE_FREETYPE
+    if (ImGui::TreeNode("FreeType Builder Flags"))
+    {
+        want_rebuild |= ImGui::CheckboxFlags("NoHinting", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_NoHinting);
+        want_rebuild |= ImGui::CheckboxFlags("NoAutoHint", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_NoAutoHint);
+        want_rebuild |= ImGui::CheckboxFlags("ForceAutoHint", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_ForceAutoHint);
+        want_rebuild |= ImGui::CheckboxFlags("LightHinting", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_LightHinting);
+        want_rebuild |= ImGui::CheckboxFlags("MonoHinting", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_MonoHinting);
+        want_rebuild |= ImGui::CheckboxFlags("Bold", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Bold);
+        want_rebuild |= ImGui::CheckboxFlags("Oblique", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Oblique);
+        want_rebuild |= ImGui::CheckboxFlags("Monochrome", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Monochrome);
+        want_rebuild |= ImGui::CheckboxFlags("LoadColor", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_LoadColor);
+        want_rebuild |= ImGui::CheckboxFlags("Bitmap", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Bitmap);
+        ImGui::TreePop();
+    }
+#endif
+
+    ImGui::Separator();
+
+    if (want_rebuild)
+    {
+        for (ImFontConfig& cfg : atlas->Sources)
+        {
+            cfg.OversampleH = data->OversampleH;
+            cfg.OversampleV = data->OversampleV;
+            cfg.RasterizerMultiply = data->RasterizerMultiply;
+            cfg.RasterizerDensity = data->RasterizerDensity;
+    }
+#ifdef IMGUI_ENABLE_STB_TRUETYPE
+        if (data->BuildMode == FontDemoBuildMode_Stb)
+        {
+            atlas->FontBuilderFlags = 0;
+            ImFontAtlasBuildSetupFontBackendIO(atlas, ImFontAtlasGetBackendIOForStbTruetype());
+        }
+#endif
+#ifdef IMGUI_ENABLE_FREETYPE
+        if (data->BuildMode == FontDemoBuildMode_FreeType)
+        {
+            atlas->FontBuilderFlags = data->FreeTypeBuilderFlags;
+            ImFontAtlasBuildSetupFontBackendIO(atlas, ImGuiFreeType::GetBackendIOForFreeType());
+        }
+#endif
+        //data->QueueClearCache = true;
+        //atlas->_PackNodesFactor = data->PackNodesFactor;
+        atlas->ClearCache();
+    }
+
+#if 0
+    ImGui::Checkbox("Slow down", &data->SlowDown);
+    if (data->SlowDown)
+        ::Sleep(100);// io.KeyShift ? 1000 : 100);
+    if (io.Fonts->TexList.Size > 1)
+        ::Sleep(500);
+#endif
+
+    ImGui::SameLine();
+    if (ImGui::Button("Clear Cache"))
+        atlas->ClearCache();
+    ImGui::SameLine();
+    if (ImGui::Button("Grow"))
+        ImFontAtlasBuildGrowTexture(atlas);
+    ImGui::SameLine();
+    if (ImGui::Button("Compact"))
+        ImFontAtlasBuildCompactTexture(atlas);
+
+    for (int tex_n = 0; tex_n < atlas->TexList.Size; tex_n++)
+    {
+        ImTextureData* tex = atlas->TexList[tex_n];
+        if (tex_n > 0)
+            ImGui::SameLine();
+        ImGui::Text("Tex: %dx%d", tex->Width, tex->Height);
+    }
+
+    {
+        ImTextureData* tex = atlas->TexData;
+        ImGui::Image(atlas->TexID, ImVec2((float)tex->Width, (float)tex->Height), { 0,0 }, { 1,1 }, { 1,1,1,1 }, { 0.5f, 0.5f, 0.5f, 1.0f });
+    }
+
+    const int surface_sqrt = (int)sqrtf((float)atlas->_PackedSurface);
+    ImGui::Text("Used area: about %d px ~%dx%d px", atlas->_PackedSurface, surface_sqrt, surface_sqrt);
+    ImGui::Text("Packed %d rects", atlas->_PackedRects);
+
+    ImGui::End();
+
+    //..returning to Splitter Test
+    /*
+    ImGui::Text("1111");
+    ImGui::GetWindowDrawList()->ChannelsSetCurrent(2);
+    ImGui::Text("2222");
+    ImGui::GetWindowDrawList()->ChannelsSetCurrent(0);
+    ImGui::Text("0000");
+    ImGui::GetWindowDrawList()->ChannelsMerge();
+    ImGui::End();
+    */
+}
+
 // Demonstrate most Dear ImGui features (this is big function!)
 // You may execute this function to experiment with the UI and understand what it does.
 // You may then search for keywords in the code when you are interested by a specific feature.
@@ -354,6 +716,8 @@ void ImGui::ShowDemoWindow(bool* p_open)
 
     // Stored data
     static ImGuiDemoWindowData demo_data;
+
+    ShowTexUpdateDebugWindow();
 
     // Examples Apps (accessible from the "Examples" menu)
     if (demo_data.ShowMainMenuBar)          { ShowExampleAppMainMenuBar(); }

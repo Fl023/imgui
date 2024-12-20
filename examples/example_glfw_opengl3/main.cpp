@@ -34,6 +34,8 @@ static void glfw_error_callback(int error, const char* description)
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
+extern void LoadFonts(float scale);
+
 // Main code
 int main(int, char**)
 {
@@ -69,6 +71,8 @@ int main(int, char**)
     //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
     //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
+
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
     // Create window with graphics context
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
@@ -123,6 +127,7 @@ int main(int, char**)
     //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
     //IM_ASSERT(font != nullptr);
+    LoadFonts(1.0f);
 
     // Our state
     bool show_demo_window = true;
@@ -150,6 +155,9 @@ int main(int, char**)
             ImGui_ImplGlfw_Sleep(10);
             continue;
         }
+
+        if (ImGui::IsKeyPressed(ImGuiKey_I))
+            ImGui_ImplOpenGL3_DestroyDeviceObjects();
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
