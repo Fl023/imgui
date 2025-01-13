@@ -377,6 +377,8 @@ static FontDemoData GFontDemoData;
 #include "misc/freetype/imgui_freetype.h"
 #endif
 
+static const char* g_ChineseText = (const char*)ImFileLoadToMemory("../../chinese text sample.txt", "rb", NULL, 1);
+
 void LoadFonts(float scale);
 void LoadFonts(float scale)
 {
@@ -498,6 +500,13 @@ static void ShowTexUpdateDebugWindow()
 
     ImGui::End();
 
+    if (g_ChineseText != NULL)
+    {
+        if (ImGui::Begin("Chinese Text"))
+            ImGui::TextWrapped("%s", g_ChineseText);
+        ImGui::End();
+    }
+
     ImGui::Begin("Texture Update Debug");
     ImGui::SetWindowFontScale(data->WindowScale); // FIXME: Old API
 
@@ -561,6 +570,7 @@ static void ShowTexUpdateDebugWindow()
     want_rebuild |= ImGui::SliderInt2("Oversample", &data->OversampleH, 0, 3);
     ImGui::EndDisabled();
     want_rebuild |= ImGui::DragInt("TexGlyphPadding", &atlas->TexGlyphPadding, 0.1f, 0, 16);
+    //want_rebuild |= ImGui::DragInt2("TexMinWidth/Height", &atlas->TexMinWidth, 32, 32, 4096);
     want_rebuild |= ImGui::DragFloat("RasterizerMultiply", &data->RasterizerMultiply, 0.001f, 0.0f, 2.0f);
     want_rebuild |= ImGui::DragFloat("RasterizerDensity", &data->RasterizerDensity, 0.001f, 0.0f, 4.0f, "%.1f");
     //want_rebuild |= ImGui::DragFloat("PackNodesFactor", &data->PackNodesFactor, 0.001f, 0.1f, 1.0f, "%.1f");
@@ -689,9 +699,9 @@ static void ShowTexUpdateDebugWindow()
         ImGui::Image(atlas->TexID, ImVec2((float)tex->Width, (float)tex->Height), { 0,0 }, { 1,1 }, { 1,1,1,1 }, { 0.5f, 0.5f, 0.5f, 1.0f });
     }
 
-    const int surface_sqrt = (int)sqrtf((float)atlas->_PackedSurface);
-    ImGui::Text("Used area: about %d px ~%dx%d px", atlas->_PackedSurface, surface_sqrt, surface_sqrt);
-    ImGui::Text("Packed %d rects", atlas->_PackedRects);
+    //const int surface_sqrt = (int)sqrtf((float)atlas->_PackedSurface);
+    //ImGui::Text("Used area: about %d px ~%dx%d px", atlas->_PackedSurface, surface_sqrt, surface_sqrt);
+    //ImGui::Text("Packed %d rects", atlas->_PackedRects);
 
     ImGui::End();
 
