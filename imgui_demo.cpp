@@ -379,13 +379,37 @@ static FontDemoData GFontDemoData;
 
 static const char* g_ChineseText = (const char*)ImFileLoadToMemory("../../chinese text sample.txt", "rb", NULL, 1);
 
+void ReplaceGlyphWithRedSquare(ImFont* font, ImWchar codepoint, float size)
+{
+    ImFontAtlas* atlas = font->ContainerAtlas;
+    const int r_idx = atlas->AddCustomRectFontGlyph(font, codepoint, (int)size, (int)size, size, { 0, size * 0.20f });
+    const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
+    unsigned char* pixels = atlas->TexData->GetPixelsAt(r->x, r->y);
+    for (int y = 0; y < r->h; y++)
+    {
+        for (int x = 0; x < r->w; x++)
+            ((ImU32*)pixels)[x] = IM_COL32(255, 0, 0, 255);
+        pixels += atlas->TexData->GetPitch();
+    }
+}
+
 void LoadFonts(float scale);
 void LoadFonts(float scale)
 {
     ImGuiIO& io = ImGui::GetIO();
+    //ImFontAtlas* atlas = io.Fonts;
 
     // (1)
-    io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 16.0f * scale);
+    ImFont* font = io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 16.0f * scale);
+
+    // Custom glyph
+    if (false)
+    {
+        // Note that we intently support override an existing glyph!
+        font->FindGlyph('a');
+        ReplaceGlyphWithRedSquare(font, 'a', font->FontSize * 0.60f);
+    }
+
     {
         //static ImWchar ranges[] = { 0x1, 0x1FFFF, 0 };
         ImFontConfig cfg;
@@ -500,7 +524,7 @@ static void ShowTexUpdateDebugWindow()
 
     ImGui::End();
 
-    if (g_ChineseText != NULL)
+    if (0 && g_ChineseText != NULL)
     {
         if (ImGui::Begin("Chinese Text"))
             ImGui::TextWrapped("%s", g_ChineseText);
@@ -590,8 +614,8 @@ static void ShowTexUpdateDebugWindow()
         if (ImGui::Button("Add Custom Rect"))
         {
             const int r_idx = atlas->AddCustomRectRegular(10, 10);
-            const ImFontAtlasCustomRect* r = atlas->GetCustomRectByIndex(r_idx);
-            unsigned char* pixels = atlas->TexData->GetPixelsAt(r->X, r->Y);
+            const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
+            unsigned char* pixels = atlas->TexData->GetPixelsAt(r->x, r->y);
 
             ImU32 col = 0;
             switch (data->CustomRects.Size & 3)
@@ -602,21 +626,25 @@ static void ShowTexUpdateDebugWindow()
             case 3: col = IM_COL32(255, 0, 255, 255); break;
             }
             data->CustomRects.push_back(r_idx);
-            for (int y = 0; y < r->Height; y++)
+            for (int y = 0; y < r->h; y++)
             {
-                for (int x = 0; x < r->Height; x++)
+                for (int x = 0; x < r->w; x++)
                     ((ImU32*)pixels)[x] = col;
                 pixels += atlas->TexData->GetPitch();
             }
         }
+        if (ImGui::Button("Replace 'a' with Custom Rect"))
+        {
+            ReplaceGlyphWithRedSquare(font_current, 'a', font_current->FontSize * 0.60f);
+        }
         for (int r_idx : data->CustomRects)
         {
-            const ImFontAtlasCustomRect* r = atlas->GetCustomRectByIndex(r_idx);
+            const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
             ImVec2 uv_min, uv_max;
             atlas->CalcCustomRectUV(r, &uv_min, &uv_max);
             ImGui::BulletText("CustomRect id %04d", r_idx);
             ImGui::SameLine();
-            ImGui::Image(atlas->TexID, ImVec2(r->Width, r->Height), uv_min, uv_max);
+            ImGui::Image(atlas->TexID, ImVec2(r->w, r->h), uv_min, uv_max);
         }
 
         ImGui::PopItemFlag();
