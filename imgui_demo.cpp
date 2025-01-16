@@ -459,9 +459,9 @@ static void ChangeFontSize(ImFont* font, float size)
         else
             cfg->SizePixels *= ratio;
     }
+    ImFontAtlasBuildReloadFont(font->ContainerAtlas, font);
+    //ImGui::ScaleWindowsInViewport((ImGuiViewportP*)ImGui::GetMainViewport(), ratio);
 }
-
-#include "../../fonts/IconsFontAwesome6.h"
 
 static void ShowTexUpdateDebugWindow()
 {
@@ -513,6 +513,11 @@ static void ShowTexUpdateDebugWindow()
         atlas->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", size, &cfg);
     }
 
+    ImGui::SameLine();
+    if (ImGui::Button("Remove font"))
+        if (atlas->Fonts.Size > 1)
+            atlas->RemoveFont(atlas->Fonts[0]);
+
     ImGui::SeparatorText("Current font");
 
     ImFont* font_current = ImGui::GetFont();
@@ -523,8 +528,10 @@ static void ShowTexUpdateDebugWindow()
     {
         //print_times = 4;
         ChangeFontSize(font_current, font_current_size);
-        atlas->ClearCache(); // FIXME: Clear cache for this font
     }
+    //if (ImGui::Button("Flip"))
+    //    ChangeFontSize(font_current, font_current_size == 20.0f ? 40.0f : 20.0f);
+
     /*if (print_times > 0)
     {
         IMGUI_DEBUG_LOG("%.3f ms/frame\n", io.DeltaTime * 1000.0f);
@@ -648,8 +655,6 @@ static void ShowTexUpdateDebugWindow()
             ImFontAtlasBuildSetupFontBackendIO(atlas, ImGuiFreeType::GetBackendIOForFreeType());
         }
 #endif
-        //data->QueueClearCache = true;
-        //atlas->_PackNodesFactor = data->PackNodesFactor;
         atlas->ClearCache();
     }
 
