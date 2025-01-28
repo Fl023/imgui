@@ -361,6 +361,7 @@ struct FontDemoData
 
     // ImFontConfig
     int                 OversampleH = 0, OversampleV = 0;
+    bool                PixelSnapH = false;
     float               RasterizerMultiply = 1.0f;
     float               RasterizerDensity = 1.0f;
     float               PackNodesFactor = 1.0f;
@@ -485,31 +486,64 @@ static void ShowTexUpdateDebugWindow()
     ImGui::Text("1111");
     */
 
+    const bool has_dynamic_fonts = (ImGui::GetIO().BackendFlags & ImGuiBackendFlags_RendererHasTextures) != 0;
+
     ImGui::Begin("Font Test");
 
-    ImGui::SetFontSize(data->TextSize);
+    if (has_dynamic_fonts)
+    {
+        static int g_Test = -1;
+        if (g_Test == -1 && ImGui::IsKeyPressed(ImGuiKey_F1))
+            g_Test = 0;
+        if (g_Test >= 0)
+        {
+            ImGui::PushFontSize(30.0f + g_Test * 5.0f);
+            ImGui::Text("Hello World %d\nqwertyuiopQWERTYUIOP", 30.0f + g_Test * 5.0f);
+            ImGui::PopFontSize();
+            g_Test += 1;
+            if (g_Test == 15)
+                g_Test = -1;
+        }
+    }
 
-    ImGui::Text("Normal size");
-    float prev_size = ImGui::GetFontSize();
-    //ImGui::SetFontSize(20.0f);
-    ImGui::Text("Size %.2f", data->TextSize);
+    if (has_dynamic_fonts)
+        ImGui::PushFontSize(data->TextSize);
+    ImGui::Text("Hello World %.2f\nqwertyuiopQWERTYUIOP", data->TextSize);
 
+    ImGui::BeginChild("Test", { 100, 100 }, ImGuiChildFlags_FrameStyle);
+    ImGui::Text("Hello world");
+    ImGui::EndChild();
+
+    if (false)
     for (int sz = 20; sz < 40; sz += 4)
     {
         //float sz = (float)(int)(60 + 50.0f * ImSin((float)ImGui::GetTime()));
-        ImGui::SetFontSize((float)sz);
+        if (has_dynamic_fonts)
+            ImGui::PushFontSize((float)sz);
         ImGui::Text("Hello this is size %.2f", sz);
+        if (has_dynamic_fonts)
+            ImGui::PopFontSize();
     }
 
-    ImGui::SetFontSize(prev_size);
+    ImGui::Button("This is a Button");
 
+    // Test ellipsis
+    if (ImGui::BeginTabBar("tabbar"))
+    {
+        if (ImGui::BeginTabItem("Long tab name"))
+        {
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
+    if (has_dynamic_fonts)
+        ImGui::PopFontSize();
 
     ImGui::Text("This is some useful text.");
 
     //ImGui::Text("Missing: \xF3\xBF\xBF\xBF");
     ImGui::Text("Missing: \x03");
-    ImGui::SameLine(0, 0);
-    ImGui::Text("...");
 
     ImGui::Text("Hiragana: \xe3\x81\x8b\xe3\x81\x8d\xe3\x81\x8f\xe3\x81\x91\xe3\x81\x93 (kakikukeko)");
     ImGui::Text("Kanjis: \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e (nihongo)");
@@ -527,9 +561,9 @@ static void ShowTexUpdateDebugWindow()
         if (ImGui::Begin("Chinese Text"))
         {
             float sz = (float)(int)(60 + 50.0f * ImSin((float)ImGui::GetTime()));
-            ImGui::SetFontSize(sz);
+            ImGui::PushFontSize(sz);
             ImGui::TextWrapped("%s", g_ChineseText);
-            ImGui::SetFontSize(prev_size);
+            ImGui::PopFontSize();
         }
         ImGui::End();
     }
@@ -555,6 +589,9 @@ static void ShowTexUpdateDebugWindow()
     // FIXME-NEWATLAS: If user could manually queue a discard previous size, we'd avoid using double size
     ImGui::DragFloat("TextSize", &data->TextSize, 0.1f, 1.0f, 128.0f, "%.0f");
 
+    if (ImGui::DragFloat("io.FontGlobalScale", &io.FontGlobalScale, 0.01f, 1.0f, 4.0f, "%.2f"))
+        IMGUI_DEBUG_LOG("io.FontGlobalScale = %f\n", io.FontGlobalScale);
+
     ImGui::SeparatorText("Shared settings");
 
 #ifdef IMGUI_ENABLE_STB_TRUETYPE
@@ -577,9 +614,18 @@ static void ShowTexUpdateDebugWindow()
     ImGui::BeginDisabled(data->BuildMode != FontDemoBuildMode_Stb);
     want_rebuild |= ImGui::SliderInt2("Oversample", &data->OversampleH, 0, 3);
     ImGui::EndDisabled();
+    want_rebuild |= ImGui::Checkbox("PixelSnapH", &data->PixelSnapH);
     want_rebuild |= ImGui::DragInt("TexGlyphPadding", &atlas->TexGlyphPadding, 0.1f, 0, 16);
     //want_rebuild |= ImGui::DragInt2("TexMinWidth/Height", &atlas->TexMinWidth, 32, 32, 4096);
     want_rebuild |= ImGui::DragFloat("RasterizerMultiply", &data->RasterizerMultiply, 0.001f, 0.0f, 2.0f);
+    /*
+    // Test discarding single font without a full ClearCache()
+    if (ImGui::Button("Multiply 0.2 on font 0"))
+    {
+        atlas->Sources[0].RasterizerMultiply = 0.2f;
+        ImFontAtlasBuildDiscardFont(atlas, atlas->Sources[0].DstFont);
+    }
+    */
     want_rebuild |= ImGui::DragFloat("RasterizerDensity", &data->RasterizerDensity, 0.001f, 0.0f, 4.0f, "%.1f");
     //want_rebuild |= ImGui::DragFloat("PackNodesFactor", &data->PackNodesFactor, 0.001f, 0.1f, 1.0f, "%.1f");
     //want_rebuild |= ImGui::DragFloat("WindowScale", &data->WindowScale, 0.05f, 0.5f, 4.0f);
@@ -660,6 +706,7 @@ static void ShowTexUpdateDebugWindow()
         {
             cfg.OversampleH = data->OversampleH;
             cfg.OversampleV = data->OversampleV;
+            cfg.PixelSnapH = data->PixelSnapH;
             cfg.RasterizerMultiply = data->RasterizerMultiply;
             cfg.RasterizerDensity = data->RasterizerDensity;
     }
