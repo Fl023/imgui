@@ -357,6 +357,8 @@ struct FontDemoData
     float               WindowScale = 1.0f;
     bool                SlowDown = false;
 
+    float               TextSize = 20.0f;
+
     // ImFontConfig
     int                 OversampleH = 0, OversampleV = 0;
     float               RasterizerMultiply = 1.0f;
@@ -381,6 +383,7 @@ static const char* g_ChineseText = (const char*)ImFileLoadToMemory("../../chines
 
 void ReplaceGlyphWithRedSquare(ImFont* font, ImWchar codepoint, float size)
 {
+    // FIXME-NEWATLAS: Need a design for AddCustomRectFontGlyph()
     ImFontAtlas* atlas = font->ContainerAtlas;
     const int r_idx = atlas->AddCustomRectFontGlyph(font, codepoint, (int)size, (int)size, size, { 0, size * 0.20f });
     const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
@@ -401,14 +404,7 @@ void LoadFonts(float scale)
 
     // (1)
     ImFont* font = io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 16.0f * scale);
-
-    // Custom glyph
-    if (false)
-    {
-        // Note that we intently support override an existing glyph!
-        font->FindGlyph('a');
-        ReplaceGlyphWithRedSquare(font, 'a', font->FontSize * 0.60f);
-    }
+    IM_UNUSED(font);
 
     {
         //static ImWchar ranges[] = { 0x1, 0x1FFFF, 0 };
@@ -473,22 +469,6 @@ static void ClearFonts(FontDemoData* data)
 
 //#include "../../fonts/IconsFontAwesome6.h"
 
-static void ChangeFontSize(ImFont* font, float size)
-{
-    float ratio = size / font->FontSize;
-    font->FontSize = size;
-    for (int cfg_n = 0; cfg_n < font->SourcesCount; cfg_n++)
-    {
-        ImFontConfig* cfg = &font->Sources[cfg_n];
-        if (cfg_n == 0)
-            cfg->SizePixels = size;
-        else
-            cfg->SizePixels *= ratio;
-    }
-    ImFontAtlasBuildReloadFont(font->ContainerAtlas, font);
-    //ImGui::ScaleWindowsInViewport((ImGuiViewportP*)ImGui::GetMainViewport(), ratio);
-}
-
 static void ShowTexUpdateDebugWindow()
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -507,9 +487,27 @@ static void ShowTexUpdateDebugWindow()
 
     ImGui::Begin("Font Test");
 
+    ImGui::SetFontSize(data->TextSize);
+
+    ImGui::Text("Normal size");
+    float prev_size = ImGui::GetFontSize();
+    //ImGui::SetFontSize(20.0f);
+    ImGui::Text("Size %.2f", data->TextSize);
+
+    for (int sz = 20; sz < 40; sz += 4)
+    {
+        //float sz = (float)(int)(60 + 50.0f * ImSin((float)ImGui::GetTime()));
+        ImGui::SetFontSize((float)sz);
+        ImGui::Text("Hello this is size %.2f", sz);
+    }
+
+    ImGui::SetFontSize(prev_size);
+
+
     ImGui::Text("This is some useful text.");
 
-    ImGui::Text("Missing: \xF3\xBF\xBF\xBF");
+    //ImGui::Text("Missing: \xF3\xBF\xBF\xBF");
+    ImGui::Text("Missing: \x03");
     ImGui::SameLine(0, 0);
     ImGui::Text("...");
 
@@ -527,7 +525,12 @@ static void ShowTexUpdateDebugWindow()
     if (0 && g_ChineseText != NULL)
     {
         if (ImGui::Begin("Chinese Text"))
+        {
+            float sz = (float)(int)(60 + 50.0f * ImSin((float)ImGui::GetTime()));
+            ImGui::SetFontSize(sz);
             ImGui::TextWrapped("%s", g_ChineseText);
+            ImGui::SetFontSize(prev_size);
+        }
         ImGui::End();
     }
 
@@ -536,15 +539,6 @@ static void ShowTexUpdateDebugWindow()
 
     bool want_rebuild = false;
     ImGui::ShowFontSelector("Fonts");
-
-    if (ImGui::Button("Add x2"))
-    {
-        ImFontConfig cfg;
-        cfg.OversampleH = data->OversampleH;
-        cfg.OversampleV = data->OversampleV;
-        float size = atlas->Fonts.back()->FontSize * 2.0f;
-        atlas->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", size, &cfg);
-    }
 
     ImGui::SameLine();
     if (ImGui::Button("Remove font"))
@@ -555,21 +549,11 @@ static void ShowTexUpdateDebugWindow()
 
     ImFont* font_current = ImGui::GetFont();
     ImGui::Text("Current: '%s'", font_current->GetDebugName());
-    float font_current_size = font_current->FontSize;
+    //float font_current_size = font_current->FontSize;
     //ImGui::PushFont(font_icon);
-    if (ImGui::DragFloat("FontSize", &font_current_size, 0.1f, 1.0f, 128.0f, "%.0f"))
-    {
-        //print_times = 4;
-        ChangeFontSize(font_current, font_current_size);
-    }
-    //if (ImGui::Button("Flip"))
-    //    ChangeFontSize(font_current, font_current_size == 20.0f ? 40.0f : 20.0f);
 
-    /*if (print_times > 0)
-    {
-        IMGUI_DEBUG_LOG("%.3f ms/frame\n", io.DeltaTime * 1000.0f);
-        print_times--;
-    }*/
+    // FIXME-NEWATLAS: If user could manually queue a discard previous size, we'd avoid using double size
+    ImGui::DragFloat("TextSize", &data->TextSize, 0.1f, 1.0f, 128.0f, "%.0f");
 
     ImGui::SeparatorText("Shared settings");
 
@@ -635,7 +619,7 @@ static void ShowTexUpdateDebugWindow()
         }
         if (ImGui::Button("Replace 'a' with Custom Rect"))
         {
-            ReplaceGlyphWithRedSquare(font_current, 'a', font_current->FontSize * 0.60f);
+            ReplaceGlyphWithRedSquare(font_current, 'a', ImGui::GetFontSize() * 0.60f);
         }
         for (int r_idx : data->CustomRects)
         {
