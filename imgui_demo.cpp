@@ -382,11 +382,12 @@ static FontDemoData GFontDemoData;
 
 static const char* g_ChineseText = (const char*)ImFileLoadToMemory("../../chinese text sample.txt", "rb", NULL, 1);
 
-void ReplaceGlyphWithRedSquare(ImFont* font, ImWchar codepoint, float size)
+void ReplaceGlyphWithRedSquare(ImFont* font, float font_size, ImWchar codepoint)
 {
     // FIXME-NEWATLAS: Need a design for AddCustomRectFontGlyph()
     ImFontAtlas* atlas = font->ContainerAtlas;
-    const int r_idx = atlas->AddCustomRectFontGlyph(font, codepoint, (int)size, (int)size, size, { 0, size * 0.20f });
+    const float square_size = font_size * 0.50f;
+    const int r_idx = atlas->AddCustomRectFontGlyphForSize(font, font_size, codepoint, (int)square_size, (int)square_size, square_size, { 0, font_size - square_size });
     const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
     unsigned char* pixels = atlas->TexData->GetPixelsAt(r->x, r->y);
     for (int y = 0; y < r->h; y++)
@@ -441,7 +442,14 @@ void LoadFonts(float scale)
     io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 17.0f * scale);// , nullptr, io.Fonts->GetGlyphRangesJapanese());
 
     io.Fonts->AddFontDefault();
-    io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f * scale);
+
+    ImFont* roboto = io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f * scale);
+    IM_UNUSED(roboto);
+#if 0 // Test ImFontFlags_LockBakedSizes
+    roboto->GetFontBaked(16.0f * scale);
+    roboto->Flags |= ImFontFlags_LockBakedSizes;
+#endif
+
     io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f * scale);
     io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f * scale);
     //io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f * scale);
@@ -498,7 +506,7 @@ static void ShowTexUpdateDebugWindow()
         if (g_Test >= 0)
         {
             ImGui::PushFontSize(30.0f + g_Test * 5.0f);
-            ImGui::Text("Hello World %d\nqwertyuiopQWERTYUIOP", 30.0f + g_Test * 5.0f);
+            ImGui::Text("Hello World %d\nqwertyuiopQWERTYUIOPabc", 30.0f + g_Test * 5.0f);
             ImGui::PopFontSize();
             g_Test += 1;
             if (g_Test == 15)
@@ -508,7 +516,7 @@ static void ShowTexUpdateDebugWindow()
 
     if (has_dynamic_fonts)
         ImGui::PushFontSize(data->TextSize);
-    ImGui::Text("Hello World %.2f\nqwertyuiopQWERTYUIOP", data->TextSize);
+    ImGui::Text("Hello World %.2f\nqwertyuiopQWERTYUIOPabc", data->TextSize);
 
     ImGui::BeginChild("Test", { 100, 100 }, ImGuiChildFlags_FrameStyle);
     ImGui::Text("Hello world");
@@ -663,9 +671,9 @@ static void ShowTexUpdateDebugWindow()
                 pixels += atlas->TexData->GetPitch();
             }
         }
-        if (ImGui::Button("Replace 'a' with Custom Rect"))
+        if (ImGui::Button("Replace 'a' with Custom Rect for current Baked Size"))
         {
-            ReplaceGlyphWithRedSquare(font_current, 'a', ImGui::GetFontSize() * 0.60f);
+            ReplaceGlyphWithRedSquare(font_current, ImGui::GetFontSize(), 'a');
         }
         for (int r_idx : data->CustomRects)
         {
@@ -724,7 +732,8 @@ static void ShowTexUpdateDebugWindow()
             ImFontAtlasBuildSetupFontBackendIO(atlas, ImGuiFreeType::GetBackendIOForFreeType());
         }
 #endif
-        atlas->ClearCache();
+        ImFontAtlasBuildClearTexture(atlas);
+        data->CustomRects.clear();
     }
 
 #if 0
@@ -736,14 +745,17 @@ static void ShowTexUpdateDebugWindow()
 #endif
 
     ImGui::SameLine();
-    if (ImGui::Button("Clear Cache"))
-        atlas->ClearCache();
+    if (ImGui::Button("Compact"))
+        atlas->CompactCache();
     ImGui::SameLine();
     if (ImGui::Button("Grow"))
         ImFontAtlasBuildGrowTexture(atlas);
     ImGui::SameLine();
-    if (ImGui::Button("Compact"))
-        ImFontAtlasBuildCompactTexture(atlas);
+    if (ImGui::Button("Clear Output"))
+    {
+        ImFontAtlasBuildClearTexture(atlas);
+        //data->CustomRects.clear();
+    }
 
     for (int tex_n = 0; tex_n < atlas->TexList.Size; tex_n++)
     {
