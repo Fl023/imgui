@@ -384,7 +384,7 @@ static const char* g_ChineseText = (const char*)ImFileLoadToMemory("../../chines
 
 void ReplaceGlyphWithRedSquare(ImFont* font, float font_size, ImWchar codepoint)
 {
-    // FIXME-NEWATLAS: Need a design for AddCustomRectFontGlyph()
+#ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
     ImFontAtlas* atlas = font->ContainerAtlas;
     const float square_size = font_size * 0.50f;
     const int r_idx = atlas->AddCustomRectFontGlyphForSize(font, font_size, codepoint, (int)square_size, (int)square_size, square_size, { 0, font_size - square_size });
@@ -396,9 +396,16 @@ void ReplaceGlyphWithRedSquare(ImFont* font, float font_size, ImWchar codepoint)
             ((ImU32*)pixels)[x] = IM_COL32(255, 0, 0, 255);
         pixels += atlas->TexData->GetPitch();
     }
+#else
+    IM_UNUSED(codepoint);
+    IM_UNUSED(font);
+    IM_UNUSED(font_size);
+#endif
 }
 
 void LoadFonts(float scale);
+void LoadProceduralFont(float scale);
+
 void LoadFonts(float scale)
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -463,7 +470,90 @@ void LoadFonts(float scale)
         io.Fonts->AddFontFromFileTTF("../../../fonts/TwitterColorEmoji-SVGinOT.ttf", 16.0f * scale, &cfg, full_ranges);
     }
 #endif
+
+    LoadProceduralFont(scale);
 }
+
+void LoadProceduralFont(float scale)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    static ImFontLoader custom_loader;
+    custom_loader.Name = "Procedural";
+    custom_loader.FontSrcContainsGlyph = [](ImFontAtlas* atlas, ImFontConfig* src, ImWchar codepoint)
+    {
+        IM_UNUSED(atlas);
+        IM_UNUSED(src);
+        if (codepoint >= 'A' && codepoint <= 'Z')
+            return false;
+        return true;
+    };
+    custom_loader.FontBakedLoadGlyph = [](ImFontAtlas* atlas, ImFontConfig* src, ImFontBaked* baked, void*, ImWchar codepoint)
+    {
+        if (codepoint >= 'A' && codepoint <= 'Z')
+            return (ImFontGlyph*)NULL;
+
+#if 0
+        const ImFontGlyph* ref_glyph = baked->FindGlyph('A');
+        int w = (int)(ref_glyph->X1 - ref_glyph->X0);
+        int h = (int)(ref_glyph->Y1 - ref_glyph->Y0);
+#else
+        int w = ImMax(1, (int)(baked->Size * 0.5f));
+        int h = ImMax(1, (codepoint >= 'a' && codepoint <= 'z') ? (int)(baked->Size * 0.7f) : (int)(baked->Size * 0.9f));
+#endif
+
+        ImFontAtlasRectId pack_id = ImFontAtlasPackAddRect(atlas, w, h);
+        ImFontAtlasRect* r = ImFontAtlasPackGetRect(atlas, pack_id);
+
+        ImFontGlyph glyph_in = {};
+        ImFontGlyph* glyph = &glyph_in;
+        glyph->Codepoint = codepoint;
+#if 0
+        glyph->AdvanceX = ref_glyph->AdvanceX;
+        glyph->X0 = ref_glyph->X0;
+        glyph->Y0 = ref_glyph->Y0;
+        glyph->X1 = ref_glyph->X1;
+        glyph->Y1 = ref_glyph->Y1;
+#else
+        glyph->AdvanceX = (float)w + 1.0f;
+        glyph->X0 = 0;
+        glyph->Y0 = baked->Size - h;
+        glyph->X1 = (float)w;
+        glyph->Y1 = (float)baked->Size;
+#endif
+        glyph->Visible = true;
+        glyph->Colored = true;
+        glyph->PackId = pack_id;
+
+        ImFontGlyph* out_glyph = ImFontAtlasBakedAddFontGlyph(atlas, baked, src, &glyph_in);
+
+        ImU32 col = IM_COL32(55 + (codepoint % 3) * 100, 55 + (codepoint % 5) * 50, 55 + ((codepoint + 2) % 3) * 100, 255);
+#if 1
+        ImTextureData* tex = atlas->TexData;
+        ImFontAtlasTextureBlockFill(tex, r->x, r->y, r->w - 2, r->h, col);
+        ImFontAtlasTextureBlockQueueUpload(atlas, tex, r->x, r->y, r->w, r->h);
+#else
+        data->TempBuffer->resize(w * h * 4);
+        for (ImU32* p = (ImU32*)(void*)data->TempBuffer->Data; p < (ImU32*)(void*)data->TempBuffer->end(); p++)
+            *p = col;
+        ImFontAtlasBakedSetFontGlyphBitmap(atlas, baked, NULL, out_glyph, r, data->TempBuffer->Data, ImTextureFormat_RGBA32, w * 4);
+#endif
+
+        return out_glyph;
+    };
+
+    ImFontConfig font_noto;
+    //strcpy(font_noto.Name, "procedural");
+    //font_noto.MergeMode = true;
+    //io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 20.0f * scale, &font_noto);
+
+    ImFontConfig empty_font;
+    strcpy(empty_font.Name, "procedural");
+    //empty_font.MergeMode = true;
+    empty_font.SizePixels = 20.0f * scale;
+    empty_font.FontLoader = &custom_loader;
+    io.Fonts->AddFont(&empty_font);
+}
+
 
 /*
 static void ClearFonts(FontDemoData* data)
@@ -516,7 +606,7 @@ static void ShowTexUpdateDebugWindow()
 
     if (has_dynamic_fonts)
         ImGui::PushFontSize(data->TextSize);
-    ImGui::Text("Hello World %.2f\nqwertyuiopQWERTYUIOPabc", data->TextSize);
+    ImGui::Text("Hello World %.2f \x03\nqwertyuiopQWERTYUIOPabc", data->TextSize);
 
     ImGui::BeginChild("Test", { 100, 100 }, ImGuiChildFlags_FrameStyle);
     ImGui::Text("Hello world");
@@ -722,14 +812,14 @@ static void ShowTexUpdateDebugWindow()
         if (data->BuildMode == FontDemoBuildMode_Stb)
         {
             atlas->FontBuilderFlags = 0;
-            ImFontAtlasBuildSetupFontBackendIO(atlas, ImFontAtlasGetBackendIOForStbTruetype());
+            ImFontAtlasBuildSetupFontLoader(atlas, ImFontAtlasGetFontLoaderForStbTruetype());
         }
 #endif
 #ifdef IMGUI_ENABLE_FREETYPE
         if (data->BuildMode == FontDemoBuildMode_FreeType)
         {
             atlas->FontBuilderFlags = data->FreeTypeBuilderFlags;
-            ImFontAtlasBuildSetupFontBackendIO(atlas, ImGuiFreeType::GetBackendIOForFreeType());
+            ImFontAtlasBuildSetupFontLoader(atlas, ImGuiFreeType::GetFontLoader());
         }
 #endif
         ImFontAtlasBuildClearTexture(atlas);
