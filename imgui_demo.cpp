@@ -353,8 +353,7 @@ struct FontDemoData
 #else
     FontDemoBuildMode   BuildMode = FontDemoBuildMode_Stb;
 #endif
-    float               GlobalScale = 1.0f;
-    float               WindowScale = 1.0f;
+    //float             GlobalScale = 1.0f;
     bool                SlowDown = false;
 
     float               TextSize = 20.0f;
@@ -608,7 +607,8 @@ static void ShowTexUpdateDebugWindow()
         ImGui::PushFontSize(data->TextSize);
     ImGui::Text("Hello World %.2f \x03\nqwertyuiopQWERTYUIOPabc", data->TextSize);
 
-    ImGui::BeginChild("Test", { 100, 100 }, ImGuiChildFlags_FrameStyle);
+    const float scale = ImGui::GetStyle().Scale;
+    ImGui::BeginChild("Test", { 100 * scale, 100 * scale}, ImGuiChildFlags_FrameStyle);
     ImGui::Text("Hello world");
     ImGui::EndChild();
 
@@ -667,7 +667,7 @@ static void ShowTexUpdateDebugWindow()
     }
 
     ImGui::Begin("Texture Update Debug");
-    ImGui::SetWindowFontScale(data->WindowScale); // FIXME: Old API
+    //ImGui::SetWindowFontScale(data->WindowScale); // FIXME: Old API
 
     bool want_rebuild = false;
     ImGui::ShowFontSelector("Fonts");
@@ -687,6 +687,9 @@ static void ShowTexUpdateDebugWindow()
     // FIXME-NEWATLAS: If user could manually queue a discard previous size, we'd avoid using double size
     ImGui::DragFloat("TextSize", &data->TextSize, 0.1f, 1.0f, 128.0f, "%.0f");
 
+    if (ImGui::DragFloat("Font+Style Scales", &ImGui::GetRootStyle().Scale, 0.05f, 0.5f, 5.0f))
+        io.FontGlobalScale = ImGui::GetRootStyle().Scale;
+
     if (ImGui::DragFloat("io.FontGlobalScale", &io.FontGlobalScale, 0.01f, 1.0f, 4.0f, "%.2f"))
         IMGUI_DEBUG_LOG("io.FontGlobalScale = %f\n", io.FontGlobalScale);
 
@@ -702,12 +705,6 @@ static void ShowTexUpdateDebugWindow()
 #else
     const bool has_freetype = false;
 #endif
-
-    /*if (ImGui::DragFloat("GlobalScale", &data->GlobalScale, 0.05f, 0.5f, 4.0f))
-    {
-        //atlas->ClearFonts();
-        //LoadFonts(data);
-    }*/
 
     ImGui::BeginDisabled(data->BuildMode != FontDemoBuildMode_Stb);
     want_rebuild |= ImGui::SliderInt2("Oversample", &data->OversampleH, 0, 3);
@@ -855,10 +852,12 @@ static void ShowTexUpdateDebugWindow()
         ImGui::Text("Tex: %dx%d", tex->Width, tex->Height);
     }
 
-    {
-        ImTextureData* tex = atlas->TexData;
-        ImGui::Image(atlas->TexID, ImVec2((float)tex->Width, (float)tex->Height), { 0,0 }, { 1,1 }, { 1,1,1,1 }, { 0.5f, 0.5f, 0.5f, 1.0f });
-    }
+    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+    ImGui::DebugNodeTexture(atlas->TexData);
+    //{
+    //    ImTextureData* tex = atlas->TexData;
+    //    ImGui::Image(atlas->TexID, ImVec2((float)tex->Width, (float)tex->Height), { 0,0 }, { 1,1 }, { 1,1,1,1 }, { 0.5f, 0.5f, 0.5f, 1.0f });
+    //}
 
     //const int surface_sqrt = (int)sqrtf((float)atlas->_PackedSurface);
     //ImGui::Text("Used area: about %d px ~%dx%d px", atlas->_PackedSurface, surface_sqrt, surface_sqrt);
@@ -5329,8 +5328,7 @@ static void DemoWindowLayout()
         if (scroll_to_off || scroll_to_pos)
             enable_track = false;
 
-        ImGuiStyle& style = ImGui::GetStyle();
-        float child_w = (ImGui::GetContentRegionAvail().x - 4 * style.ItemSpacing.x) / 5;
+        float child_w = (ImGui::GetContentRegionAvail().x - 4 * ImGui::GetStyle().ItemSpacing.x) / 5;
         if (child_w < 1.0f)
             child_w = 1.0f;
         ImGui::PushID("##VerticalScrolling");
@@ -5387,7 +5385,7 @@ static void DemoWindowLayout()
         ImGui::PushID("##HorizontalScrolling");
         for (int i = 0; i < 5; i++)
         {
-            float child_height = ImGui::GetTextLineHeight() + style.ScrollbarSize + style.WindowPadding.y * 2.0f;
+            float child_height = ImGui::GetTextLineHeight() + ImGui::GetStyle().ScrollbarSize + ImGui::GetStyle().WindowPadding.y * 2.0f;
             ImGuiWindowFlags child_flags = ImGuiWindowFlags_HorizontalScrollbar | (enable_extra_decorations ? ImGuiWindowFlags_AlwaysVerticalScrollbar : 0);
             ImGuiID child_id = ImGui::GetID((void*)(intptr_t)i);
             bool child_is_visible = ImGui::BeginChild(child_id, ImVec2(-100, child_height), ImGuiChildFlags_Borders, child_flags); // FIXME-SCALE
@@ -8816,13 +8814,16 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
     IMGUI_DEMO_MARKER("Tools/Style Editor");
     // You can pass in a reference ImGuiStyle structure to compare to, revert to and save to
     // (without a reference style pointer, we will use one compared locally as a reference)
-    ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiStyle* curr_style = &ImGui::GetStyle();
+    ImGuiStyle* root_style = curr_style->RootStyleToEdit ? curr_style->RootStyleToEdit : curr_style;
+    static bool show_scaled_style = false;
+
     static ImGuiStyle ref_saved_style;
 
     // Default to using internal storage as reference
     static bool init = true;
     if (init && ref == NULL)
-        ref_saved_style = style;
+        ref_saved_style = *root_style;
     init = false;
     if (ref == NULL)
         ref = &ref_saved_style;
@@ -8830,19 +8831,27 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
     ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.50f);
 
     if (ImGui::ShowStyleSelector("Colors##Selector"))
-        ref_saved_style = style;
+    {
+        ;// ref_saved_style = style; // FIXME-SCALE
+    }
     ImGui::ShowFontSelector("Fonts##Selector");
 
     // Simplified Settings (expose floating-pointer border sizes as boolean representing 0.0f or 1.0f)
-    if (ImGui::SliderFloat("FrameRounding", &style.FrameRounding, 0.0f, 12.0f, "%.0f"))
-        style.GrabRounding = style.FrameRounding; // Make GrabRounding always the same value as FrameRounding
-    { bool border = (style.WindowBorderSize > 0.0f); if (ImGui::Checkbox("WindowBorder", &border)) { style.WindowBorderSize = border ? 1.0f : 0.0f; } }
-    ImGui::SameLine();
-    { bool border = (style.FrameBorderSize > 0.0f);  if (ImGui::Checkbox("FrameBorder",  &border)) { style.FrameBorderSize  = border ? 1.0f : 0.0f; } }
-    ImGui::SameLine();
-    { bool border = (style.PopupBorderSize > 0.0f);  if (ImGui::Checkbox("PopupBorder",  &border)) { style.PopupBorderSize  = border ? 1.0f : 0.0f; } }
+    {
+        ImGuiStyle& style = show_scaled_style ? *curr_style : *root_style;
+        ImGui::BeginDisabled(show_scaled_style);
+        if (ImGui::SliderFloat("FrameRounding", &style.FrameRounding, 0.0f, 12.0f, "%.0f"))
+            style.GrabRounding = style.FrameRounding; // Make GrabRounding always the same value as FrameRounding
+        ImGui::EndDisabled();
+        { bool border = (style.WindowBorderSize > 0.0f); if (ImGui::Checkbox("WindowBorder", &border)) { style.WindowBorderSize = border ? 1.0f : 0.0f; } }
+        ImGui::SameLine();
+        { bool border = (style.FrameBorderSize > 0.0f);  if (ImGui::Checkbox("FrameBorder", &border)) { style.FrameBorderSize = border ? 1.0f : 0.0f; } }
+        ImGui::SameLine();
+        { bool border = (style.PopupBorderSize > 0.0f);  if (ImGui::Checkbox("PopupBorder", &border)) { style.PopupBorderSize = border ? 1.0f : 0.0f; } }
+    }
 
-    // Save/Revert button
+    // Save/Revert button // FIXME-SCALE
+    /*
     if (ImGui::Button("Save Ref"))
         *ref = ref_saved_style = style;
     ImGui::SameLine();
@@ -8852,6 +8861,7 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
     HelpMarker(
         "Save/Revert in local non-persistent storage. Default Colors definition are not affected. "
         "Use \"Export\" below to save them somewhere.");
+    */
 
     ImGui::Separator();
 
@@ -8859,6 +8869,13 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
     {
         if (ImGui::BeginTabItem("Sizes"))
         {
+            ImGuiStyle& style = show_scaled_style ? *curr_style : *root_style;
+            ImGui::SeparatorText("Global Scale");
+            ImGui::DragFloat("Scale", (float*)&style.Scale, 0.01f, 0.10f, 4.0f, "%.02f");
+            ImGui::Checkbox("Show Scaled Style", &show_scaled_style);
+
+            ImGui::BeginDisabled(show_scaled_style);
+
             ImGui::SeparatorText("Main");
             ImGui::SliderFloat2("WindowPadding", (float*)&style.WindowPadding, 0.0f, 20.0f, "%.0f");
             ImGui::SliderFloat2("FramePadding", (float*)&style.FramePadding, 0.0f, 20.0f, "%.0f");
@@ -8936,11 +8953,14 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
             ImGui::SliderFloat2("DisplayWindowPadding", (float*)&style.DisplayWindowPadding, 0.0f, 30.0f, "%.0f"); ImGui::SameLine(); HelpMarker("Apply to regular windows: amount which we enforce to keep visible when moving near edges of your screen.");
             ImGui::SliderFloat2("DisplaySafeAreaPadding", (float*)&style.DisplaySafeAreaPadding, 0.0f, 30.0f, "%.0f"); ImGui::SameLine(); HelpMarker("Apply to every windows, menus, popups, tooltips: amount where we avoid displaying contents. Adjust if you cannot see the edges of your screen (e.g. on a TV where scaling has not been configured).");
 
+            ImGui::EndDisabled();
+
             ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem("Colors"))
         {
+            ImGuiStyle& style = *curr_style;
             static int output_dest = 0;
             static bool output_only_modified = true;
             if (ImGui::Button("Export"))
@@ -9038,6 +9058,7 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
 
         if (ImGui::BeginTabItem("Rendering"))
         {
+            ImGuiStyle& style = *curr_style;
             ImGui::Checkbox("Anti-aliased lines", &style.AntiAliasedLines);
             ImGui::SameLine();
             HelpMarker("When disabling anti-aliasing lines, you'll probably want to disable borders in your style as well.");

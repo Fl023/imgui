@@ -884,11 +884,26 @@ struct ImFontStackData
 // [SECTION] Style support
 //-----------------------------------------------------------------------------
 
+// Extend ImGuiStyleVar
+enum ImGuiStyleVarPrivate_
+{
+    ImGuiStyleVar_WindowBorderHoverPadding = ImGuiStyleVar_COUNT,
+    ImGuiStyleVar_TouchExtraPadding,
+    ImGuiStyleVar_ColumnsMinSpacing,
+    ImGuiStyleVar_LogSliderDeadzone,
+    ImGuiStyleVar_TabCloseButtonMinWidthSelected,
+    ImGuiStyleVar_TabCloseButtonMinWidthUnselected,
+    ImGuiStyleVar_COUNT_Private,
+};
+
 struct ImGuiStyleVarInfo
 {
-    ImU32           Count : 8;      // 1+
-    ImGuiDataType   DataType : 8;
-    ImU32           Offset : 16;    // Offset in parent structure
+    ImU32           Count : 6;          // 1+
+    ImGuiDataType   DataType : 8;       // Only ImGuiDataType_Float supported for now
+    ImU32           RoundOnPush : 1;    // Round/truncate on PushStyleVar()
+    ImU32           RoundOnScale : 1;   // Round/truncate on PushStyleScale()
+    ImU32           Offset : 16;        // Offset in parent structure
+
     void* GetVarPtr(void* parent) const { return (void*)((unsigned char*)parent + Offset); }
 };
 
@@ -2315,9 +2330,11 @@ struct ImGuiContext
 {
     bool                    Initialized;
     bool                    FontAtlasOwnedByContext;            // IO.Fonts-> is owned by the ImGuiContext and will be destructed along with it.
+    float                   StyleScaleCurrFrame;
     ImGuiIO                 IO;
     ImGuiPlatformIO         PlatformIO;
     ImGuiStyle              Style;
+    ImGuiStyle              RootStyleToEdit;
     ImGuiConfigFlags        ConfigFlagsCurrFrame;               // = g.IO.ConfigFlags at the time of NewFrame()
     ImGuiConfigFlags        ConfigFlagsLastFrame;
     ImFont*                 Font;                               // == FontStack.back().Font
@@ -3434,6 +3451,9 @@ namespace ImGui
 
     // Parameter stacks (shared)
     IMGUI_API const ImGuiStyleVarInfo* GetStyleVarInfo(ImGuiStyleVar idx);
+    IMGUI_API ImGuiStyle&   GetRootStyle();
+    IMGUI_API void          PushStyleScale(float scale_factor);
+    IMGUI_API void          PopStyleScale();
     IMGUI_API void          BeginDisabledOverrideReenable();
     IMGUI_API void          EndDisabledOverrideReenable();
 

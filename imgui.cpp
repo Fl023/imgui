@@ -1351,6 +1351,7 @@ static void*                GImAllocatorUserData = NULL;
 
 ImGuiStyle::ImGuiStyle()
 {
+    Scale                       = 1.0f;             // Global scale applies to everything below. The value is locked and latched during the frame.
     Alpha                       = 1.0f;             // Global alpha applies to everything in Dear ImGui.
     DisabledAlpha               = 0.60f;            // Additional alpha multiplier applied by BeginDisabled(). Multiply over current value of Alpha.
     WindowPadding               = ImVec2(8,8);      // Padding within a window
@@ -1410,12 +1411,15 @@ ImGuiStyle::ImGuiStyle()
     HoverFlagsForTooltipMouse   = ImGuiHoveredFlags_Stationary | ImGuiHoveredFlags_DelayShort | ImGuiHoveredFlags_AllowWhenDisabled;    // Default flags when using IsItemHovered(ImGuiHoveredFlags_ForTooltip) or BeginItemTooltip()/SetItemTooltip() while using mouse.
     HoverFlagsForTooltipNav     = ImGuiHoveredFlags_NoSharedDelay | ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_AllowWhenDisabled;  // Default flags when using IsItemHovered(ImGuiHoveredFlags_ForTooltip) or BeginItemTooltip()/SetItemTooltip() while using keyboard/gamepad.
 
+    RootStyleToEdit = NULL;
+
     // Default theme
     ImGui::StyleColorsDark(this);
 }
 
 // To scale your entire UI (e.g. if you want your app to use High DPI or generally be DPI aware) you may use this helper function. Scaling the fonts is done separately and is up to you.
 // Important: This operation is lossy because we round all sizes to integer. If you need to change your scale multiples, call this over a freshly initialized ImGuiStyle structure rather than scaling multiple times.
+// Also see ImGui::PushStyleScale()
 void ImGuiStyle::ScaleAllSizes(float scale_factor)
 {
     WindowPadding = ImTrunc(WindowPadding * scale_factor);
@@ -3379,6 +3383,16 @@ ImGuiStyle& ImGui::GetStyle()
     return GImGui->Style;
 }
 
+ImGuiStyle& ImGui::GetRootStyle()
+{
+    ImGuiContext& g = *GImGui;
+    IM_ASSERT(&g != NULL && "No current context. Did you call ImGui::CreateContext() and ImGui::SetCurrentContext() ?");
+    if (g.WithinFrameScope)
+        return g.RootStyleToEdit;
+    else
+        return g.Style;
+}
+
 ImU32 ImGui::GetColorU32(ImGuiCol idx, float alpha_mul)
 {
     ImGuiStyle& style = GImGui->Style;
@@ -3459,47 +3473,75 @@ static const ImGuiCol GWindowDockStyleColors[ImGuiWindowDockStyleCol_COUNT] =
 
 static const ImGuiStyleVarInfo GStyleVarsInfo[] =
 {
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, Alpha) },                     // ImGuiStyleVar_Alpha
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, DisabledAlpha) },             // ImGuiStyleVar_DisabledAlpha
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, WindowPadding) },             // ImGuiStyleVar_WindowPadding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, WindowRounding) },            // ImGuiStyleVar_WindowRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, WindowBorderSize) },          // ImGuiStyleVar_WindowBorderSize
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, WindowMinSize) },             // ImGuiStyleVar_WindowMinSize
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, WindowTitleAlign) },          // ImGuiStyleVar_WindowTitleAlign
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ChildRounding) },             // ImGuiStyleVar_ChildRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ChildBorderSize) },           // ImGuiStyleVar_ChildBorderSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, PopupRounding) },             // ImGuiStyleVar_PopupRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, PopupBorderSize) },           // ImGuiStyleVar_PopupBorderSize
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, FramePadding) },              // ImGuiStyleVar_FramePadding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, FrameRounding) },             // ImGuiStyleVar_FrameRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, FrameBorderSize) },           // ImGuiStyleVar_FrameBorderSize
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ItemSpacing) },               // ImGuiStyleVar_ItemSpacing
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ItemInnerSpacing) },          // ImGuiStyleVar_ItemInnerSpacing
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, IndentSpacing) },             // ImGuiStyleVar_IndentSpacing
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, CellPadding) },               // ImGuiStyleVar_CellPadding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ScrollbarSize) },             // ImGuiStyleVar_ScrollbarSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ScrollbarRounding) },         // ImGuiStyleVar_ScrollbarRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, GrabMinSize) },               // ImGuiStyleVar_GrabMinSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, GrabRounding) },              // ImGuiStyleVar_GrabRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ImageBorderSize) },           // ImGuiStyleVar_ImageBorderSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, TabRounding) },               // ImGuiStyleVar_TabRounding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, TabBorderSize) },             // ImGuiStyleVar_TabBorderSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, TabBarBorderSize) },          // ImGuiStyleVar_TabBarBorderSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, TabBarOverlineSize) },        // ImGuiStyleVar_TabBarOverlineSize
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, TableAngledHeadersAngle)},    // ImGuiStyleVar_TableAngledHeadersAngle
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, TableAngledHeadersTextAlign)},// ImGuiStyleVar_TableAngledHeadersTextAlign
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, ButtonTextAlign) },           // ImGuiStyleVar_ButtonTextAlign
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, SelectableTextAlign) },       // ImGuiStyleVar_SelectableTextAlign
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, SeparatorTextBorderSize)},    // ImGuiStyleVar_SeparatorTextBorderSize
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, SeparatorTextAlign) },        // ImGuiStyleVar_SeparatorTextAlign
-    { 2, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, SeparatorTextPadding) },      // ImGuiStyleVar_SeparatorTextPadding
-    { 1, ImGuiDataType_Float, (ImU32)offsetof(ImGuiStyle, DockingSeparatorSize) },      // ImGuiStyleVar_DockingSeparatorSize
+    { 1, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, Alpha) },                     // ImGuiStyleVar_Alpha
+    { 1, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, DisabledAlpha) },             // ImGuiStyleVar_DisabledAlpha
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, WindowPadding) },             // ImGuiStyleVar_WindowPadding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, WindowRounding) },            // ImGuiStyleVar_WindowRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, WindowBorderSize) },          // ImGuiStyleVar_WindowBorderSize
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, WindowMinSize) },             // ImGuiStyleVar_WindowMinSize
+    { 2, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, WindowTitleAlign) },          // ImGuiStyleVar_WindowTitleAlign
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ChildRounding) },             // ImGuiStyleVar_ChildRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ChildBorderSize) },           // ImGuiStyleVar_ChildBorderSize
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, PopupRounding) },             // ImGuiStyleVar_PopupRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, PopupBorderSize) },           // ImGuiStyleVar_PopupBorderSize
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, FramePadding) },              // ImGuiStyleVar_FramePadding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, FrameRounding) },             // ImGuiStyleVar_FrameRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, FrameBorderSize) },           // ImGuiStyleVar_FrameBorderSize
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ItemSpacing) },               // ImGuiStyleVar_ItemSpacing
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ItemInnerSpacing) },          // ImGuiStyleVar_ItemInnerSpacing
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, IndentSpacing) },             // ImGuiStyleVar_IndentSpacing
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, CellPadding) },               // ImGuiStyleVar_CellPadding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ScrollbarSize) },             // ImGuiStyleVar_ScrollbarSize
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ScrollbarRounding) },         // ImGuiStyleVar_ScrollbarRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, GrabMinSize) },               // ImGuiStyleVar_GrabMinSize
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, GrabRounding) },              // ImGuiStyleVar_GrabRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ImageBorderSize) },           // ImGuiStyleVar_ImageBorderSize
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabRounding) },               // ImGuiStyleVar_TabRounding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabBorderSize) },             // ImGuiStyleVar_TabBorderSize
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabBarBorderSize) },          // ImGuiStyleVar_TabBarBorderSize
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabBarOverlineSize) },        // ImGuiStyleVar_TabBarOverlineSize
+    { 1, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, TableAngledHeadersAngle)},    // ImGuiStyleVar_TableAngledHeadersAngle
+    { 2, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, TableAngledHeadersTextAlign)},// ImGuiStyleVar_TableAngledHeadersTextAlign
+    { 2, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, ButtonTextAlign) },           // ImGuiStyleVar_ButtonTextAlign
+    { 2, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, SelectableTextAlign) },       // ImGuiStyleVar_SelectableTextAlign
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, SeparatorTextBorderSize)},    // ImGuiStyleVar_SeparatorTextBorderSize
+    { 2, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, SeparatorTextAlign) },        // ImGuiStyleVar_SeparatorTextAlign
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, SeparatorTextPadding) },      // ImGuiStyleVar_SeparatorTextPadding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, DockingSeparatorSize) },      // ImGuiStyleVar_DockingSeparatorSize
+    // imgui_internal.h
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, WindowBorderHoverPadding) },          // ImGuiStyleVar_WindowBorderHoverPadding
+    { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TouchExtraPadding) },                 // ImGuiStyleVar_TouchExtraPadding
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ColumnsMinSpacing) },                 // ImGuiStyleVar_ColumnsMinSpacing
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, LogSliderDeadzone) },                 // ImGuiStyleVar_LogSliderDeadzone
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabCloseButtonMinWidthSelected) },    // ImGuiStyleVar_TabCloseButtonMinWidthSelected
+    { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabCloseButtonMinWidthUnselected) },  // ImGuiStyleVar_TabCloseButtonMinWidthUnselected
+};
+
+static const ImGuiStyleVar GStyleVarsToScale[] =
+{
+    ImGuiStyleVar_WindowPadding, ImGuiStyleVar_WindowRounding, ImGuiStyleVar_WindowBorderSize, ImGuiStyleVar_WindowMinSize,
+    ImGuiStyleVar_ChildRounding, ImGuiStyleVar_ChildBorderSize,
+    ImGuiStyleVar_PopupRounding, ImGuiStyleVar_PopupBorderSize,
+    ImGuiStyleVar_FramePadding, ImGuiStyleVar_FrameRounding, ImGuiStyleVar_FrameBorderSize,
+    ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_ItemInnerSpacing,
+    ImGuiStyleVar_IndentSpacing,
+    ImGuiStyleVar_CellPadding,
+    ImGuiStyleVar_ScrollbarSize, ImGuiStyleVar_ScrollbarRounding,
+    ImGuiStyleVar_GrabMinSize, ImGuiStyleVar_GrabRounding,
+    ImGuiStyleVar_TabRounding, ImGuiStyleVar_TabBorderSize, ImGuiStyleVar_TabBarBorderSize, ImGuiStyleVar_TabBarOverlineSize,
+    ImGuiStyleVar_SeparatorTextBorderSize, ImGuiStyleVar_SeparatorTextPadding,
+    ImGuiStyleVar_DockingSeparatorSize,
+    ImGuiStyleVar_WindowBorderHoverPadding,
+    ImGuiStyleVar_TouchExtraPadding,
+    ImGuiStyleVar_ColumnsMinSpacing,
+    ImGuiStyleVar_LogSliderDeadzone,
+    ImGuiStyleVar_TabCloseButtonMinWidthSelected, ImGuiStyleVar_TabCloseButtonMinWidthUnselected,
 };
 
 const ImGuiStyleVarInfo* ImGui::GetStyleVarInfo(ImGuiStyleVar idx)
 {
-    IM_ASSERT(idx >= 0 && idx < ImGuiStyleVar_COUNT);
-    IM_STATIC_ASSERT(IM_ARRAYSIZE(GStyleVarsInfo) == ImGuiStyleVar_COUNT);
+    IM_ASSERT(idx >= 0 && idx < ImGuiStyleVar_COUNT_Private);
+    IM_STATIC_ASSERT(IM_ARRAYSIZE(GStyleVarsInfo) == ImGuiStyleVar_COUNT_Private);
     return &GStyleVarsInfo[idx];
 }
 
@@ -3578,6 +3620,39 @@ void ImGui::PopStyleVar(int count)
         g.StyleVarStack.pop_back();
         count--;
     }
+}
+
+// FIXME: How can this apply to user-side variables e.g. held by extensions.
+void ImGui::PushStyleScale(float scale_factor)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiStyle& style = g.Style;
+    for (ImGuiStyleVar idx : GStyleVarsToScale)
+    {
+        const ImGuiStyleVarInfo* var_info = &GStyleVarsInfo[idx];
+        IM_ASSERT(var_info->RoundOnScale == 1);
+        if (var_info->DataType == ImGuiDataType_Float && var_info->Count == 1)
+        {
+            float pvar = *(float*)var_info->GetVarPtr(&style);
+            if (pvar != 0.0f && pvar != FLT_MAX)
+                pvar = ImTrunc(pvar * scale_factor);
+            PushStyleVar((ImGuiStyleVar)idx, pvar);
+        }
+        else if (var_info->DataType == ImGuiDataType_Float && var_info->Count == 2)
+        {
+            ImVec2 pvar = *(ImVec2*)var_info->GetVarPtr(&style);
+            PushStyleVar((ImGuiStyleVar)idx, ImTrunc(pvar * scale_factor));
+        }
+        else
+        {
+            IM_ASSERT(0);
+        }
+    }
+}
+
+void ImGui::PopStyleScale()
+{
+    PopStyleVar(IM_ARRAYSIZE(GStyleVarsToScale));
 }
 
 const char* ImGui::GetStyleColorName(ImGuiCol idx)
@@ -5438,6 +5513,15 @@ void ImGui::NewFrame()
     // Update texture list (collect destroyed textures, etc.)
     UpdateTexturesNewFrame();
 
+    // Style scaling
+    g.StyleScaleCurrFrame = g.Style.Scale;
+    if (g.StyleScaleCurrFrame != 1.0f)
+    {
+        g.RootStyleToEdit = g.Style;                  // Backup current style.
+        g.Style.RootStyleToEdit = &g.RootStyleToEdit; // This is for Style Editor to show this version instead.
+        PushStyleScale(g.Style.Scale);                // Call PushStyleVar() on all size variables and apply new facotr.
+    }
+
     // Setup current font and draw list shared data
     ImFontAtlas* atlas = g.IO.Fonts;
     if ((g.IO.BackendFlags & ImGuiBackendFlags_RendererHasTextures) == 0)
@@ -6013,6 +6097,11 @@ void ImGui::EndFrame()
     g.IO.MetricsActiveWindows = g.WindowsActiveCount;
 
     UpdateTexturesEndFrame();
+
+    // Style scaling
+    if (g.StyleScaleCurrFrame != 1.0f)
+        PopStyleScale();
+    g.Style = g.RootStyleToEdit; // Apply all modifications done to root style + explicitly CANCEL out any modification done to current style.
 
     // Unlock font atlas
     ImFontAtlas* atlas = g.IO.Fonts;
@@ -10953,6 +11042,7 @@ static void ImGui::ErrorCheckNewFrameSanityChecks()
     IM_ASSERT((g.IO.DeltaTime > 0.0f || g.FrameCount == 0)              && "Need a positive DeltaTime!");
     IM_ASSERT((g.FrameCount == 0 || g.FrameCountEnded == g.FrameCount)  && "Forgot to call Render() or EndFrame() at the end of the previous frame?");
     IM_ASSERT(g.IO.DisplaySize.x >= 0.0f && g.IO.DisplaySize.y >= 0.0f  && "Invalid DisplaySize value!");
+    IM_ASSERT(g.Style.Scale > 0.0f                                      && "Invalid style setting!");
     IM_ASSERT(g.Style.CurveTessellationTol > 0.0f                       && "Invalid style setting!");
     IM_ASSERT(g.Style.CircleTessellationMaxError > 0.0f                 && "Invalid style setting!");
     IM_ASSERT(g.Style.Alpha >= 0.0f && g.Style.Alpha <= 1.0f            && "Invalid style setting!"); // Allows us to avoid a few clamps in color computations
