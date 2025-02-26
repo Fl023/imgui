@@ -3509,6 +3509,7 @@ static const ImGuiStyleVarInfo GStyleVarsInfo[] =
     { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, SeparatorTextPadding) },      // ImGuiStyleVar_SeparatorTextPadding
     { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, DockingSeparatorSize) },      // ImGuiStyleVar_DockingSeparatorSize
     // imgui_internal.h
+    { 1, ImGuiDataType_Float, 0, 0, (ImU32)offsetof(ImGuiStyle, Scale) },                             // ImGuiStyleVar_Scale. This is written to manually by PushStyleScale().
     { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, WindowBorderHoverPadding) },          // ImGuiStyleVar_WindowBorderHoverPadding
     { 2, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TouchExtraPadding) },                 // ImGuiStyleVar_TouchExtraPadding
     { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, ColumnsMinSpacing) },                 // ImGuiStyleVar_ColumnsMinSpacing
@@ -3517,142 +3518,189 @@ static const ImGuiStyleVarInfo GStyleVarsInfo[] =
     { 1, ImGuiDataType_Float, 0, 1, (ImU32)offsetof(ImGuiStyle, TabCloseButtonMinWidthUnselected) },  // ImGuiStyleVar_TabCloseButtonMinWidthUnselected
 };
 
-static const ImGuiStyleVar GStyleVarsToScale[] =
+void ImGuiStyleVarStack_PushStyleVarFloat(ImGuiStyleVarStack* sv_stack, int idx, float val)
 {
-    ImGuiStyleVar_WindowPadding, ImGuiStyleVar_WindowRounding, ImGuiStyleVar_WindowBorderSize, ImGuiStyleVar_WindowMinSize,
-    ImGuiStyleVar_ChildRounding, ImGuiStyleVar_ChildBorderSize,
-    ImGuiStyleVar_PopupRounding, ImGuiStyleVar_PopupBorderSize,
-    ImGuiStyleVar_FramePadding, ImGuiStyleVar_FrameRounding, ImGuiStyleVar_FrameBorderSize,
-    ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_ItemInnerSpacing,
-    ImGuiStyleVar_IndentSpacing,
-    ImGuiStyleVar_CellPadding,
-    ImGuiStyleVar_ScrollbarSize, ImGuiStyleVar_ScrollbarRounding,
-    ImGuiStyleVar_GrabMinSize, ImGuiStyleVar_GrabRounding,
-    ImGuiStyleVar_TabRounding, ImGuiStyleVar_TabBorderSize, ImGuiStyleVar_TabBarBorderSize, ImGuiStyleVar_TabBarOverlineSize,
-    ImGuiStyleVar_SeparatorTextBorderSize, ImGuiStyleVar_SeparatorTextPadding,
-    ImGuiStyleVar_DockingSeparatorSize,
-    ImGuiStyleVar_WindowBorderHoverPadding,
-    ImGuiStyleVar_TouchExtraPadding,
-    ImGuiStyleVar_ColumnsMinSpacing,
-    ImGuiStyleVar_LogSliderDeadzone,
-    ImGuiStyleVar_TabCloseButtonMinWidthSelected, ImGuiStyleVar_TabCloseButtonMinWidthUnselected,
-};
-
-const ImGuiStyleVarInfo* ImGui::GetStyleVarInfo(ImGuiStyleVar idx)
-{
-    IM_ASSERT(idx >= 0 && idx < ImGuiStyleVar_COUNT_Private);
-    IM_STATIC_ASSERT(IM_ARRAYSIZE(GStyleVarsInfo) == ImGuiStyleVar_COUNT_Private);
-    return &GStyleVarsInfo[idx];
-}
-
-void ImGui::PushStyleVar(ImGuiStyleVar idx, float val)
-{
-    ImGuiContext& g = *GImGui;
-    const ImGuiStyleVarInfo* var_info = GetStyleVarInfo(idx);
+    IM_ASSERT(idx >= 0 && idx < sv_stack->VarInfosCount);
+    const ImGuiStyleVarInfo* var_info = sv_stack->VarInfos + idx;
     if (var_info->DataType != ImGuiDataType_Float || var_info->Count != 1)
     {
         IM_ASSERT_USER_ERROR(0, "Calling PushStyleVar() variant with wrong type!");
         return;
     }
-    float* pvar = (float*)var_info->GetVarPtr(&g.Style);
-    g.StyleVarStack.push_back(ImGuiStyleMod(idx, *pvar));
-    *pvar = val;
+    float* pvar = (float*)var_info->GetVarPtr(sv_stack->PtrStyle);
+    float* pvar_unrounded = (float*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+    sv_stack->Data.push_back(ImGuiStyleMod(idx, 0x01, *pvar, *pvar_unrounded));
+    *pvar = *pvar_unrounded = val;
 }
 
-void ImGui::PushStyleVarX(ImGuiStyleVar idx, float val_x)
+void ImGuiStyleVarStack_PushStyleVarFloat2(ImGuiStyleVarStack* sv_stack, int idx, const ImVec2& val)
 {
-    ImGuiContext& g = *GImGui;
-    const ImGuiStyleVarInfo* var_info = GetStyleVarInfo(idx);
+    IM_ASSERT(idx >= 0 && idx < sv_stack->VarInfosCount);
+    const ImGuiStyleVarInfo* var_info = sv_stack->VarInfos + idx;
     if (var_info->DataType != ImGuiDataType_Float || var_info->Count != 2)
     {
         IM_ASSERT_USER_ERROR(0, "Calling PushStyleVar() variant with wrong type!");
         return;
     }
-    ImVec2* pvar = (ImVec2*)var_info->GetVarPtr(&g.Style);
-    g.StyleVarStack.push_back(ImGuiStyleMod(idx, *pvar));
-    pvar->x = val_x;
+    ImVec2* pvar = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyle);
+    ImVec2* pvar_unrounded = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+    sv_stack->Data.push_back(ImGuiStyleMod(idx, 0x03, pvar->x, pvar_unrounded->x, pvar->y, pvar_unrounded->y));
+    *pvar = *pvar_unrounded = val;
 }
 
-void ImGui::PushStyleVarY(ImGuiStyleVar idx, float val_y)
+void ImGuiStyleVarStack_PushStyleVarFloat2x(ImGuiStyleVarStack* sv_stack, int idx, float val_x)
 {
-    ImGuiContext& g = *GImGui;
-    const ImGuiStyleVarInfo* var_info = GetStyleVarInfo(idx);
+    IM_ASSERT(idx >= 0 && idx < sv_stack->VarInfosCount);
+    const ImGuiStyleVarInfo* var_info = sv_stack->VarInfos + idx;
     if (var_info->DataType != ImGuiDataType_Float || var_info->Count != 2)
     {
         IM_ASSERT_USER_ERROR(0, "Calling PushStyleVar() variant with wrong type!");
         return;
     }
-    ImVec2* pvar = (ImVec2*)var_info->GetVarPtr(&g.Style);
-    g.StyleVarStack.push_back(ImGuiStyleMod(idx, *pvar));
-    pvar->y = val_y;
+    ImVec2* pvar = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyle);
+    ImVec2* pvar_unrounded = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+    sv_stack->Data.push_back(ImGuiStyleMod(idx, 0x01, pvar->x, pvar_unrounded->x));
+    pvar->x = pvar_unrounded->x = val_x;
 }
 
-void ImGui::PushStyleVar(ImGuiStyleVar idx, const ImVec2& val)
+void ImGuiStyleVarStack_PushStyleVarFloat2y(ImGuiStyleVarStack* sv_stack, int idx, float val_y)
 {
-    ImGuiContext& g = *GImGui;
-    const ImGuiStyleVarInfo* var_info = GetStyleVarInfo(idx);
+    IM_ASSERT(idx >= 0 && idx < sv_stack->VarInfosCount);
+    const ImGuiStyleVarInfo* var_info = sv_stack->VarInfos + idx;
     if (var_info->DataType != ImGuiDataType_Float || var_info->Count != 2)
     {
         IM_ASSERT_USER_ERROR(0, "Calling PushStyleVar() variant with wrong type!");
         return;
     }
-    ImVec2* pvar = (ImVec2*)var_info->GetVarPtr(&g.Style);
-    g.StyleVarStack.push_back(ImGuiStyleMod(idx, *pvar));
-    *pvar = val;
+    ImVec2* pvar = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyle);
+    ImVec2* pvar_unrounded = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+    sv_stack->Data.push_back(ImGuiStyleMod(idx, 0x02, pvar->y, pvar_unrounded->y));
+    pvar->y = pvar_unrounded->y = val_y;
 }
 
-void ImGui::PopStyleVar(int count)
+void ImGuiStyleVarStack_PopStyleVars(ImGuiStyleVarStack* sv_stack, int count)
 {
-    ImGuiContext& g = *GImGui;
-    if (g.StyleVarStack.Size < count)
+    if (sv_stack->Data.Size < count)
     {
         IM_ASSERT_USER_ERROR(0, "Calling PopStyleVar() too many times!");
-        count = g.StyleVarStack.Size;
+        count = sv_stack->Data.Size;
     }
     while (count > 0)
     {
         // We avoid a generic memcpy(data, &backup.Backup.., GDataTypeSize[info->Type] * info->Count), the overhead in Debug is not worth it.
-        ImGuiStyleMod& backup = g.StyleVarStack.back();
-        const ImGuiStyleVarInfo* var_info = GetStyleVarInfo(backup.VarIdx);
-        void* data = var_info->GetVarPtr(&g.Style);
-        if (var_info->DataType == ImGuiDataType_Float && var_info->Count == 1)      { ((float*)data)[0] = backup.BackupFloat[0]; }
-        else if (var_info->DataType == ImGuiDataType_Float && var_info->Count == 2) { ((float*)data)[0] = backup.BackupFloat[0]; ((float*)data)[1] = backup.BackupFloat[1]; }
-        g.StyleVarStack.pop_back();
+        ImGuiStyleMod& backup = sv_stack->Data.back();
+        const ImGuiStyleVarInfo* var_info = sv_stack->VarInfos + backup.VarIdx;
+        if (var_info->DataType == ImGuiDataType_Float)
+        {
+            float* pvar = (float*)var_info->GetVarPtr(sv_stack->PtrStyle);
+            float* pvar_unrounded = (float*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+            int n = 0;
+            if (backup.AxisMask & 0x01)
+            {
+                pvar[0] = backup.BackupFloat[n++];
+                pvar_unrounded[0] = backup.BackupFloat[n++];
+            }
+            if (backup.AxisMask & 0x02)
+            {
+                pvar[1] = backup.BackupFloat[n++];
+                pvar_unrounded[1] = backup.BackupFloat[n++];
+            }
+        }
+        sv_stack->Data.pop_back();
         count--;
     }
 }
 
-// FIXME: How can this apply to user-side variables e.g. held by extensions.
-void ImGui::PushStyleScale(float scale_factor)
+void ImGuiStyleVarStack_PushStyleScale(ImGuiStyleVarStack* sv_stack, float scale_factor)
 {
-    ImGuiContext& g = *GImGui;
-    ImGuiStyle& style = g.Style;
-    for (ImGuiStyleVar idx : GStyleVarsToScale)
+    int pushed_count = 0;
+    const ImGuiStyleVarInfo* var_info = sv_stack->VarInfos;
+    for (int var_idx = 0; var_idx < sv_stack->VarInfosCount; var_idx++, var_info++)
     {
-        const ImGuiStyleVarInfo* var_info = &GStyleVarsInfo[idx];
-        IM_ASSERT(var_info->RoundOnScale == 1);
+        if (var_info->RoundOnScale == 0)
+            continue;
+        pushed_count++;
         if (var_info->DataType == ImGuiDataType_Float && var_info->Count == 1)
         {
-            float pvar = *(float*)var_info->GetVarPtr(&style);
-            if (pvar != 0.0f && pvar != FLT_MAX)
-                pvar = ImTrunc(pvar * scale_factor);
-            PushStyleVar((ImGuiStyleVar)idx, pvar);
+            float* pvar_rounded = (float*)var_info->GetVarPtr(sv_stack->PtrStyle);
+            float* pvar_unrounded = (float*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+            sv_stack->Data.push_back(ImGuiStyleMod(var_idx, 0x01, *pvar_rounded, *pvar_unrounded)); // Push backup
+            float var = *pvar_unrounded;
+            bool apply_scale = (var != 0.0f && var != FLT_MAX);
+            *pvar_unrounded = apply_scale ? var * scale_factor : var;
+            *pvar_rounded = apply_scale ? ImTrunc(var * scale_factor) : var;
         }
         else if (var_info->DataType == ImGuiDataType_Float && var_info->Count == 2)
         {
-            ImVec2 pvar = *(ImVec2*)var_info->GetVarPtr(&style);
-            PushStyleVar((ImGuiStyleVar)idx, ImTrunc(pvar * scale_factor));
+            ImVec2* pvar_rounded = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyle);
+            ImVec2* pvar_unrounded = (ImVec2*)var_info->GetVarPtr(sv_stack->PtrStyleUnrounded);
+            sv_stack->Data.push_back(ImGuiStyleMod(var_idx, 0x03, pvar_rounded->x, pvar_unrounded->x, pvar_rounded->y, pvar_unrounded->y)); // Push backup
+            ImVec2 var = *pvar_unrounded;
+            *pvar_unrounded = var * scale_factor;
+            *pvar_rounded = ImTrunc(var * scale_factor);
         }
         else
         {
             IM_ASSERT(0);
         }
     }
+    if (sv_stack->VarPopScaleCount < 0)
+        sv_stack->VarPopScaleCount = pushed_count;
+}
+
+void ImGuiStyleVarStack_PopStyleScale(ImGuiStyleVarStack* sv_stack)
+{
+    IM_ASSERT(sv_stack->VarPopScaleCount >= 0);
+    ImGuiStyleVarStack_PopStyleVars(sv_stack, sv_stack->VarPopScaleCount);
+}
+
+void ImGui::PushStyleVar(ImGuiStyleVar idx, float val)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiStyleVarStack_PushStyleVarFloat(&g.StyleVarStack, idx, val);
+}
+
+void ImGui::PushStyleVarX(ImGuiStyleVar idx, float val_x)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiStyleVarStack_PushStyleVarFloat2x(&g.StyleVarStack, idx, val_x);
+}
+
+void ImGui::PushStyleVarY(ImGuiStyleVar idx, float val_y)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiStyleVarStack_PushStyleVarFloat2y(&g.StyleVarStack, idx, val_y);
+}
+
+void ImGui::PushStyleVar(ImGuiStyleVar idx, const ImVec2& val)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiStyleVarStack_PushStyleVarFloat2(&g.StyleVarStack, idx, val);
+}
+
+void ImGui::PopStyleVar(int count)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiStyleVarStack_PopStyleVars(&g.StyleVarStack, count);
+}
+
+// FIXME: How can this apply to user-side variables e.g. held by extensions.
+// At minimum, we want to make it easy for extensions to adopt the same logic.
+void ImGui::PushStyleScale(float target_scale)
+{
+    ImGuiContext& g = *GImGui;
+    float scale_factor = target_scale / g.Style.Scale;
+    ImGuiStyleVarStack_PushStyleVarFloat(&g.StyleVarStack, ImGuiStyleVar_Scale, g.Style.Scale);
+    ImGuiStyleVarStack_PushStyleScale(&g.StyleVarStack, scale_factor);
+    g.Style.Scale = target_scale;
 }
 
 void ImGui::PopStyleScale()
 {
-    PopStyleVar(IM_ARRAYSIZE(GStyleVarsToScale));
+    ImGuiContext& g = *GImGui;
+    ImGuiStyleVarStack_PopStyleScale(&g.StyleVarStack);
+    IM_ASSERT(g.StyleVarStack.Data.back().VarIdx == ImGuiStyleVar_Scale);
+    ImGuiStyleVarStack_PopStyleVars(&g.StyleVarStack, 1);
 }
 
 const char* ImGui::GetStyleColorName(ImGuiCol idx)
@@ -4135,6 +4183,12 @@ ImGuiContext::ImGuiContext(ImFontAtlas* shared_font_atlas)
     CurrentItemFlags = ImGuiItemFlags_None;
     DebugShowGroupRects = false;
 
+    StyleVarStack.PtrStyle = &Style;
+    StyleVarStack.PtrStyleUnrounded = &StyleUnrounded;
+    StyleVarStack.VarInfos = GStyleVarsInfo;
+    StyleVarStack.VarInfosCount = IM_ARRAYSIZE(GStyleVarsInfo);
+    StyleVarStack.VarPopScaleCount = -1;
+
     CurrentViewport = NULL;
     MouseViewport = MouseLastHoveredViewport = NULL;
     PlatformLastFocusedViewportId = 0;
@@ -4404,7 +4458,7 @@ void ImGui::Shutdown()
     g.KeysRoutingTable.Clear();
 
     g.ColorStack.clear();
-    g.StyleVarStack.clear();
+    g.StyleVarStack.Data.clear();
     g.FontStack.clear();
     g.OpenPopupStack.clear();
     g.BeginPopupStack.clear();
@@ -5515,11 +5569,13 @@ void ImGui::NewFrame()
 
     // Style scaling
     g.StyleScaleCurrFrame = g.Style.Scale;
+    memcpy(&g.StyleUnrounded, &g.Style, sizeof(g.StyleUnrounded));
     if (g.StyleScaleCurrFrame != 1.0f)
     {
         g.RootStyleToEdit = g.Style;                  // Backup current style.
         g.Style.RootStyleToEdit = &g.RootStyleToEdit; // This is for Style Editor to show this version instead.
-        PushStyleScale(g.Style.Scale);                // Call PushStyleVar() on all size variables and apply new facotr.
+        g.Style.Scale = 1.0f;
+        PushStyleScale(g.StyleScaleCurrFrame);        // Call PushStyleVar() on all size variables and apply new facotr.
     }
 
     // Setup current font and draw list shared data
@@ -11050,6 +11106,7 @@ static void ImGui::ErrorCheckNewFrameSanityChecks()
     IM_ASSERT(g.Style.WindowBorderHoverPadding > 0.0f                   && "Invalid style setting!"); // Required otherwise cannot resize from borders.
     IM_ASSERT(g.Style.WindowMenuButtonPosition == ImGuiDir_None || g.Style.WindowMenuButtonPosition == ImGuiDir_Left || g.Style.WindowMenuButtonPosition == ImGuiDir_Right);
     IM_ASSERT(g.Style.ColorButtonPosition == ImGuiDir_Left || g.Style.ColorButtonPosition == ImGuiDir_Right);
+    IM_STATIC_ASSERT(offsetof(ImGuiStyle, Alpha) < offsetof(ImGuiStyle, Colors) && offsetof(ImGuiStyle, FramePadding) < offsetof(ImGuiStyle, Colors)); // style.Colors[] needs to come after size fields, because of ImGuiStyleSizesStorage
 
     // Error handling: we do not accept 100% silent recovery! Please contact me if you feel this is getting in your way.
     if (g.IO.ConfigErrorRecovery)
@@ -11142,7 +11199,7 @@ void ImGui::ErrorRecoveryStoreState(ImGuiErrorRecoveryState* state_out)
     state_out->SizeOfIDStack = (short)g.CurrentWindow->IDStack.Size;
     state_out->SizeOfTreeStack = (short)g.CurrentWindow->DC.TreeDepth; // NOT g.TreeNodeStack.Size which is a partial stack!
     state_out->SizeOfColorStack = (short)g.ColorStack.Size;
-    state_out->SizeOfStyleVarStack = (short)g.StyleVarStack.Size;
+    state_out->SizeOfStyleVarStack = (short)g.StyleVarStack.Data.Size;
     state_out->SizeOfFontStack = (short)g.FontStack.Size;
     state_out->SizeOfFocusScopeStack = (short)g.FocusScopeStack.Size;
     state_out->SizeOfGroupStack = (short)g.GroupStack.Size;
@@ -11258,7 +11315,7 @@ void    ImGui::ErrorRecoveryTryToRecoverWindowState(const ImGuiErrorRecoveryStat
         IM_ASSERT_USER_ERROR(0, "Missing PopItemFlag()");
         PopItemFlag();
     }
-    while (g.StyleVarStack.Size > state_in->SizeOfStyleVarStack) //-V1044
+    while (g.StyleVarStack.Data.Size > state_in->SizeOfStyleVarStack) //-V1044
     {
         IM_ASSERT_USER_ERROR(0, "Missing PopStyleVar()");
         PopStyleVar();

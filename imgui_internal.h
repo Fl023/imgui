@@ -887,7 +887,8 @@ struct ImFontStackData
 // Extend ImGuiStyleVar
 enum ImGuiStyleVarPrivate_
 {
-    ImGuiStyleVar_WindowBorderHoverPadding = ImGuiStyleVar_COUNT,
+    ImGuiStyleVar_Scale = ImGuiStyleVar_COUNT,
+    ImGuiStyleVar_WindowBorderHoverPadding,
     ImGuiStyleVar_TouchExtraPadding,
     ImGuiStyleVar_ColumnsMinSpacing,
     ImGuiStyleVar_LogSliderDeadzone,
@@ -917,11 +918,54 @@ struct ImGuiColorMod
 // Stacked style modifier, backup of modified data so we can restore it. Data type inferred from the variable.
 struct ImGuiStyleMod
 {
-    ImGuiStyleVar   VarIdx;
-    union           { int BackupInt[2]; float BackupFloat[2]; };
-    ImGuiStyleMod(ImGuiStyleVar idx, int v)     { VarIdx = idx; BackupInt[0] = v; }
-    ImGuiStyleMod(ImGuiStyleVar idx, float v)   { VarIdx = idx; BackupFloat[0] = v; }
-    ImGuiStyleMod(ImGuiStyleVar idx, ImVec2 v)  { VarIdx = idx; BackupFloat[0] = v.x; BackupFloat[1] = v.y; }
+    ImGuiStyleVar   VarIdx : 16;
+    unsigned int    AxisMask : 2;
+    union { int BackupInt[2 * 2]; float BackupFloat[2 * 2]; };
+
+    ImGuiStyleMod(ImGuiStyleVar idx, int v) { VarIdx = idx; AxisMask = 0x01; BackupInt[0] = v; }
+    ImGuiStyleMod(ImGuiStyleVar idx, float v) { VarIdx = idx; AxisMask = 0x01; BackupFloat[0] = v; }
+    ImGuiStyleMod(ImGuiStyleVar idx, ImVec2 v) { VarIdx = idx; AxisMask = 0x03; BackupFloat[0] = v.x; BackupFloat[1] = v.y; }
+
+    ImGuiStyleMod(ImGuiStyleVar idx, int axis_mask, float v0, float v1 = 0.0f, float v2 = 0.0f, float v3 = 0.0f)
+    {
+        IM_ASSERT(axis_mask >= 0 && axis_mask <= 0x03);
+        VarIdx = idx;
+        AxisMask = axis_mask;
+        BackupFloat[0] = v0;
+        BackupFloat[1] = v1;
+        BackupFloat[2] = v2;
+        BackupFloat[3] = v3;
+    }
+};
+
+// Gather logic and data for PushStyleVar/PopStyleVar()
+// This is separate in order to facilitate third-party extensions adopting the same logic.
+struct ImGuiStyleVarStack
+{
+    void*                       PtrStyle = NULL;            // Point to e.g. g.Style
+    void*                       PtrStyleUnrounded = NULL;   // (Optional) Point to a secondary buffer where non-rounded values are stored during PushStyleScale() calls.
+    const ImGuiStyleVarInfo*    VarInfos = NULL;            // Array of ImGuiStyleVarInfo
+    int                         VarInfosCount = 0;          //
+    int                         VarPopScaleCount = -1;      // Lazily computed in ImGuiStyleVarStack_PushStyleScale()
+    ImVector<ImGuiStyleMod>     Data;                       // Backup of modified values.
+};
+
+IMGUI_API void ImGuiStyleVarStack_PushStyleVarFloat(ImGuiStyleVarStack* sv_stack, int idx, float val);
+IMGUI_API void ImGuiStyleVarStack_PushStyleVarFloat2(ImGuiStyleVarStack* sv_stack, int idx, const ImVec2& val);
+IMGUI_API void ImGuiStyleVarStack_PushStyleVarFloat2x(ImGuiStyleVarStack* sv_stack, int idx, float val_x);
+IMGUI_API void ImGuiStyleVarStack_PushStyleVarFloat2y(ImGuiStyleVarStack* sv_stack, int idx, float val_y);
+IMGUI_API void ImGuiStyleVarStack_PopStyleVars(ImGuiStyleVarStack* sv_stack, int count);
+IMGUI_API void ImGuiStyleVarStack_PushStyleScale(ImGuiStyleVarStack* sv_stack, float scale_factor);
+IMGUI_API void ImGuiStyleVarStack_PopStyleScale(ImGuiStyleVarStack* sv_stack);
+
+// Buffer to store all Style variables until Colors[]
+// You may cast this to ImGuiStyle but then ONLY use those variables before Colors[]
+// A "normal" implementation of this would be for us to declare a ImGuiStyleSizes
+// structure, move all fields there, and have ImGuiStyle use or inherit from it.
+// We may/will do it in the future if we can ensure this won't make binding generators trip.
+struct ImGuiStyleSizesStorage
+{
+    ImU8    Data[offsetof(ImGuiStyle, Colors)];
 };
 
 //-----------------------------------------------------------------------------
@@ -2334,6 +2378,7 @@ struct ImGuiContext
     ImGuiIO                 IO;
     ImGuiPlatformIO         PlatformIO;
     ImGuiStyle              Style;
+    ImGuiStyleSizesStorage  StyleUnrounded;
     ImGuiStyle              RootStyleToEdit;
     ImGuiConfigFlags        ConfigFlagsCurrFrame;               // = g.IO.ConfigFlags at the time of NewFrame()
     ImGuiConfigFlags        ConfigFlagsLastFrame;
@@ -2444,7 +2489,7 @@ struct ImGuiContext
     // Shared stacks
     ImGuiCol                        DebugFlashStyleColorIdx;    // (Keep close to ColorStack to share cache line)
     ImVector<ImGuiColorMod>         ColorStack;                 // Stack for PushStyleColor()/PopStyleColor() - inherited by Begin()
-    ImVector<ImGuiStyleMod>         StyleVarStack;              // Stack for PushStyleVar()/PopStyleVar() - inherited by Begin()
+    ImGuiStyleVarStack              StyleVarStack;              // Stack for PushStyleVar()/PopStyleVar() - inherited by Begin()
     ImVector<ImFontStackData>       FontStack;                  // Stack for PushFont()/PopFont() - inherited by Begin()
     ImVector<ImGuiFocusScopeData>   FocusScopeStack;            // Stack for PushFocusScope()/PopFocusScope() - inherited by BeginChild(), pushed into by Begin()
     ImVector<ImGuiItemFlags>        ItemFlagsStack;             // Stack for PushItemFlag()/PopItemFlag() - inherited by Begin()
@@ -3450,9 +3495,8 @@ namespace ImGui
     IMGUI_API void          ShrinkWidths(ImGuiShrinkWidthItem* items, int count, float width_excess);
 
     // Parameter stacks (shared)
-    IMGUI_API const ImGuiStyleVarInfo* GetStyleVarInfo(ImGuiStyleVar idx);
     IMGUI_API ImGuiStyle&   GetRootStyle();
-    IMGUI_API void          PushStyleScale(float scale_factor);
+    IMGUI_API void          PushStyleScale(float target_scale);
     IMGUI_API void          PopStyleScale();
     IMGUI_API void          BeginDisabledOverrideReenable();
     IMGUI_API void          EndDisabledOverrideReenable();
