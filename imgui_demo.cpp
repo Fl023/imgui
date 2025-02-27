@@ -605,7 +605,8 @@ static void ShowTexUpdateDebugWindow()
 
     if (has_dynamic_fonts)
         ImGui::PushFontSize(data->TextSize);
-    ImGui::Text("Hello World %.2f \x03\nqwertyuiopQWERTYUIOPabc", data->TextSize);
+    ImGui::Text("Hello World %.2f -> %.2f", data->TextSize, ImGui::GetFontSize());
+    ImGui::Text("\x03 qwertyuiopQWERTYUIOPabc");
 
     const float scale = ImGui::GetStyle().Scale;
     ImGui::BeginChild("Test", { 100 * scale, 100 * scale}, ImGuiChildFlags_FrameStyle);
@@ -877,6 +878,72 @@ static void ShowTexUpdateDebugWindow()
     */
 }
 
+static void DebugPrintStyles()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiStyle& style_u = (ImGuiStyle&)GImGui->StyleUnrounded;
+
+    char buf[32];
+    sprintf(buf, "Scale %.2f", style.Scale);
+    ImGui::SeparatorText(buf);
+    ImGui::Text("FramePadding %.2f,%.2f  (unrounded %.2f,%.2f)",
+        style.FramePadding.x, style.FramePadding.y, style_u.FramePadding.x, style_u.FramePadding.y);
+    ImGui::Text("WindowBorderSize %.2f (unrounded %.2f)",
+        style.WindowBorderSize, style_u.WindowBorderSize);
+}
+
+static void ShowStyleScaleDebugWindow()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    ImGui::Begin("Scale Tests");
+    if (ImGui::DragFloat("Font+Style Scales", &ImGui::GetRootStyle().Scale, 0.05f, 0.5f, 5.0f))
+        io.FontGlobalScale = ImGui::GetRootStyle().Scale;
+
+    // #1
+#if 0
+    DebugPrintStyles();
+    ImGui::Indent();
+    DebugPrintStyles();
+
+    ImGui::PushStyleScale(2.0f); ImGui::Indent(8);
+    DebugPrintStyles();
+    ImGui::Unindent(8); ImGui::PopStyleScale();
+
+    ImGui::PushStyleScale(1.25f); ImGui::Indent(8);
+    DebugPrintStyles();
+    ImGui::PushStyleScale(1.50f); ImGui::Indent(8);
+    DebugPrintStyles();
+    ImGui::PushStyleScale(2.00f); ImGui::Indent(8);
+    DebugPrintStyles();
+    ImGui::Unindent(8); ImGui::PopStyleScale();
+    DebugPrintStyles();
+    ImGui::Unindent(8); ImGui::PopStyleScale();
+    DebugPrintStyles();
+    ImGui::Unindent(8); ImGui::PopStyleScale();
+    DebugPrintStyles();
+#endif
+
+    // #2
+#if 1
+    {
+        ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 10.0f);
+        DebugPrintStyles();
+        ImGui::PushStyleScale(1.333333f); ImGui::Indent(8);
+        DebugPrintStyles();
+        ImGui::PushStyleScale(1.0f); ImGui::Indent(8);
+        DebugPrintStyles();
+        ImGui::Unindent(8); ImGui::PopStyleScale();
+        DebugPrintStyles();
+        ImGui::Unindent(8); ImGui::PopStyleScale();
+        DebugPrintStyles();
+        ImGui::PopStyleVar();
+    }
+#endif
+
+    ImGui::End();
+}
+
 // Demonstrate most Dear ImGui features (this is big function!)
 // You may execute this function to experiment with the UI and understand what it does.
 // You may then search for keywords in the code when you are interested by a specific feature.
@@ -893,6 +960,7 @@ void ImGui::ShowDemoWindow(bool* p_open)
     static ImGuiDemoWindowData demo_data;
 
     ShowTexUpdateDebugWindow();
+    ShowStyleScaleDebugWindow();
 
     // Examples Apps (accessible from the "Examples" menu)
     if (demo_data.ShowMainMenuBar)          { ShowExampleAppMainMenuBar(); }
