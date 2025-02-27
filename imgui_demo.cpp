@@ -688,11 +688,11 @@ static void ShowTexUpdateDebugWindow()
     // FIXME-NEWATLAS: If user could manually queue a discard previous size, we'd avoid using double size
     ImGui::DragFloat("TextSize", &data->TextSize, 0.1f, 1.0f, 128.0f, "%.0f");
 
-    if (ImGui::DragFloat("Font+Style Scales", &ImGui::GetRootStyle().Scale, 0.05f, 0.5f, 5.0f))
-        io.FontGlobalScale = ImGui::GetRootStyle().Scale;
+    ImGui::DragFloat("Font+Style Scales", &ImGui::GetRootStyle().Scale, 0.05f, 0.5f, 5.0f);
+    //io.FontGlobalScale = ImGui::GetRootStyle().Scale;
 
-    if (ImGui::DragFloat("io.FontGlobalScale", &io.FontGlobalScale, 0.01f, 1.0f, 4.0f, "%.2f"))
-        IMGUI_DEBUG_LOG("io.FontGlobalScale = %f\n", io.FontGlobalScale);
+    //if (ImGui::DragFloat("io.FontGlobalScale", &io.FontGlobalScale, 0.01f, 1.0f, 4.0f, "%.2f"))
+    //    IMGUI_DEBUG_LOG("io.FontGlobalScale = %f\n", io.FontGlobalScale);
 
     ImGui::SeparatorText("Shared settings");
 
@@ -886,19 +886,18 @@ static void DebugPrintStyles()
     char buf[32];
     sprintf(buf, "Scale %.2f", style.Scale);
     ImGui::SeparatorText(buf);
-    ImGui::Text("FramePadding %.2f,%.2f  (unrounded %.2f,%.2f)",
-        style.FramePadding.x, style.FramePadding.y, style_u.FramePadding.x, style_u.FramePadding.y);
-    ImGui::Text("WindowBorderSize %.2f (unrounded %.2f)",
-        style.WindowBorderSize, style_u.WindowBorderSize);
+    ImGui::Text("FontSize %.2f", ImGui::GetFontSize());
+    ImGui::Text("FramePadding %.2f,%.2f  (unrounded %.2f,%.2f)", style.FramePadding.x, style.FramePadding.y, style_u.FramePadding.x, style_u.FramePadding.y);
+    ImGui::Text("WindowBorderSize %.2f (unrounded %.2f)", style.WindowBorderSize, style_u.WindowBorderSize);
 }
 
 static void ShowStyleScaleDebugWindow()
 {
-    ImGuiIO& io = ImGui::GetIO();
+    //ImGuiIO& io = ImGui::GetIO();
 
     ImGui::Begin("Scale Tests");
-    if (ImGui::DragFloat("Font+Style Scales", &ImGui::GetRootStyle().Scale, 0.05f, 0.5f, 5.0f))
-        io.FontGlobalScale = ImGui::GetRootStyle().Scale;
+    ImGui::DragFloat("Font+Style Scales", &ImGui::GetRootStyle().Scale, 0.05f, 0.5f, 5.0f);
+    //io.FontGlobalScale = ImGui::GetRootStyle().Scale;
 
     // #1
 #if 0

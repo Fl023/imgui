@@ -3693,6 +3693,7 @@ void ImGui::PushStyleScale(float target_scale)
     ImGuiStyleVarStack_PushStyleVarFloat(&g.StyleVarStack, ImGuiStyleVar_Scale, g.Style.Scale);
     ImGuiStyleVarStack_PushStyleScale(&g.StyleVarStack, scale_factor);
     g.Style.Scale = target_scale;
+    UpdateCurrentFontSize();
 }
 
 void ImGui::PopStyleScale()
@@ -3701,6 +3702,7 @@ void ImGui::PopStyleScale()
     ImGuiStyleVarStack_PopStyleScale(&g.StyleVarStack);
     IM_ASSERT(g.StyleVarStack.Data.back().VarIdx == ImGuiStyleVar_Scale);
     ImGuiStyleVarStack_PopStyleVars(&g.StyleVarStack, 1);
+    UpdateCurrentFontSize();
 }
 
 const char* ImGui::GetStyleColorName(ImGuiCol idx)
@@ -5570,13 +5572,10 @@ void ImGui::NewFrame()
     // Style scaling
     g.StyleScaleCurrFrame = g.Style.Scale;
     memcpy(&g.StyleUnrounded, &g.Style, sizeof(g.StyleUnrounded));
+    g.RootStyleToEdit = g.Style;                  // Backup current style.
+    g.Style.RootStyleToEdit = &g.RootStyleToEdit; // This is for Style Editor to show this version instead.
     if (g.StyleScaleCurrFrame != 1.0f)
-    {
-        g.RootStyleToEdit = g.Style;                  // Backup current style.
-        g.Style.RootStyleToEdit = &g.RootStyleToEdit; // This is for Style Editor to show this version instead.
-        g.Style.Scale = 1.0f;
-        PushStyleScale(g.StyleScaleCurrFrame);        // Call PushStyleVar() on all size variables and apply new facotr.
-    }
+        ImGuiStyleVarStack_PushStyleScale(&g.StyleVarStack, g.Style.Scale);
 
     // Setup current font and draw list shared data
     ImFontAtlas* atlas = g.IO.Fonts;
@@ -6156,7 +6155,7 @@ void ImGui::EndFrame()
 
     // Style scaling
     if (g.StyleScaleCurrFrame != 1.0f)
-        PopStyleScale();
+        ImGuiStyleVarStack_PopStyleScale(&g.StyleVarStack);
     g.Style = g.RootStyleToEdit; // Apply all modifications done to root style + explicitly CANCEL out any modification done to current style.
 
     // Unlock font atlas
@@ -8652,7 +8651,8 @@ void ImGui::SetCurrentFont(ImFont* font, float font_size)
 void ImGui::UpdateCurrentFontSize()
 {
     ImGuiContext& g = *GImGui;
-    float final_size = g.FontSizeBeforeScaling * g.IO.FontGlobalScale;
+    float final_size = g.FontSizeBeforeScaling * g.Style.Scale;;
+    final_size *= g.IO.FontGlobalScale;
     if (ImGuiWindow* window = g.CurrentWindow)
         final_size *= window->FontWindowScale * window->FontDpiScale;
     final_size = ImMax(1.0f, IM_ROUND(final_size));

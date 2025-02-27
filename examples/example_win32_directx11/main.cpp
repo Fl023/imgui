@@ -81,7 +81,7 @@ int main(int, char**)
     }
 
 #if 1
-    io.FontGlobalScale = dpi_scale;
+    //io.FontGlobalScale = dpi_scale;
     style.Scale = dpi_scale;
 #endif
 
