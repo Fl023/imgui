@@ -364,8 +364,8 @@ struct FontDemoData
     float               RasterizerMultiply = 1.0f;
     float               RasterizerDensity = 1.0f;
     float               PackNodesFactor = 1.0f;
-    int                 FreeTypeBuilderFlags = 0;
     ImVector<int>       CustomRects;
+    int                 CustomRectImage = -1;
 };
 
 static FontDemoData GFontDemoData;
@@ -386,8 +386,8 @@ void ReplaceGlyphWithRedSquare(ImFont* font, float font_size, ImWchar codepoint)
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
     ImFontAtlas* atlas = font->ContainerAtlas;
     const float square_size = font_size * 0.50f;
-    const int r_idx = atlas->AddCustomRectFontGlyphForSize(font, font_size, codepoint, (int)square_size, (int)square_size, square_size, { 0, font_size - square_size });
-    const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
+    const int r_id = atlas->AddCustomRectFontGlyphForSize(font, font_size, codepoint, (int)square_size, (int)square_size, square_size, { 0, font_size - square_size });
+    const ImTextureRect* r = atlas->GetCustomRect(r_id);
     unsigned char* pixels = atlas->TexData->GetPixelsAt(r->x, r->y);
     for (int y = 0; y < r->h; y++)
     {
@@ -408,10 +408,13 @@ void LoadProceduralFont(float scale);
 void LoadFonts(float scale)
 {
     ImGuiIO& io = ImGui::GetIO();
-    //ImFontAtlas* atlas = io.Fonts;
+    ImFontAtlas* atlas = io.Fonts;
+
+    // Test adding a custom rect
+    //atlas->AddCustomRectRegular(100, 100);
 
     // (1)
-    ImFont* font = io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 16.0f * scale);
+    ImFont* font = atlas->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 16.0f * scale);
     IM_UNUSED(font);
 
     {
@@ -422,43 +425,43 @@ void LoadFonts(float scale)
 #ifdef IMGUI_ENABLE_FREETYPE
         cfg.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
 #endif
-        io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\seguiemj.ttf", 16.0f * scale, &cfg);// , ranges);
-        //io.Fonts->AddFontFromFileTTF("../../misc/fonts/NotoColorEmoji.ttf", 16.0f, &cfg, ranges);
+        atlas->AddFontFromFileTTF("C:\\Windows\\Fonts\\seguiemj.ttf", 16.0f * scale, &cfg);// , ranges);
+        //atlas->AddFontFromFileTTF("../../misc/fonts/NotoColorEmoji.ttf", 16.0f, &cfg, ranges);
     }
     {
         ImFontConfig cfg;
         cfg.MergeMode = true;
-        io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 16.0f * scale, &cfg);
+        atlas->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 16.0f * scale, &cfg);
     }
 
     // (2)
     {
         ImFontConfig cfg_main;
         //cfg.OversampleH = 1;
-        ImFont* font_main = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f * scale, &cfg_main);
+        ImFont* font_main = atlas->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f * scale, &cfg_main);
         IM_UNUSED(font_main);
 
         ImFontConfig cfg_icon;
         cfg_icon.MergeMode = true;
         cfg_icon.OversampleH = 1;
-        ImFont* font_icon = io.Fonts->AddFontFromFileTTF("../../../fonts/fa-solid-900.ttf", 18.0f * scale, &cfg_icon);
+        ImFont* font_icon = atlas->AddFontFromFileTTF("../../../fonts/fa-solid-900.ttf", 18.0f * scale, &cfg_icon);
         IM_UNUSED(font_icon);
     }
 
-    io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 17.0f * scale);// , nullptr, io.Fonts->GetGlyphRangesJapanese());
+    atlas->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 17.0f * scale);// , nullptr, atlas->GetGlyphRangesJapanese());
 
-    io.Fonts->AddFontDefault();
+    atlas->AddFontDefault();
 
-    ImFont* roboto = io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f * scale);
+    ImFont* roboto = atlas->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f * scale);
     IM_UNUSED(roboto);
 #if 0 // Test ImFontFlags_LockBakedSizes
     roboto->GetFontBaked(16.0f * scale);
     roboto->Flags |= ImFontFlags_LockBakedSizes;
 #endif
 
-    io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f * scale);
-    io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f * scale);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f * scale);
+    atlas->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f * scale);
+    atlas->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f * scale);
+    //atlas->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f * scale);
 
 #ifdef IMGUI_ENABLE_FREETYPE_LUNASVG
     {
@@ -466,7 +469,7 @@ void LoadFonts(float scale)
         static ImWchar full_ranges[] = { 1, 0xFFFFF, 0 };
         //cfg.OversampleH = cfg.OversampleV = 1;
         cfg.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
-        io.Fonts->AddFontFromFileTTF("../../../fonts/TwitterColorEmoji-SVGinOT.ttf", 16.0f * scale, &cfg, full_ranges);
+        atlas->AddFontFromFileTTF("../../../fonts/TwitterColorEmoji-SVGinOT.ttf", 16.0f * scale, &cfg, full_ranges);
     }
 #endif
 
@@ -476,6 +479,7 @@ void LoadFonts(float scale)
 void LoadProceduralFont(float scale)
 {
     ImGuiIO& io = ImGui::GetIO();
+
     static ImFontLoader custom_loader;
     custom_loader.Name = "Procedural";
     custom_loader.FontSrcContainsGlyph = [](ImFontAtlas* atlas, ImFontConfig* src, ImWchar codepoint)
@@ -501,7 +505,7 @@ void LoadProceduralFont(float scale)
 #endif
 
         ImFontAtlasRectId pack_id = ImFontAtlasPackAddRect(atlas, w, h);
-        ImFontAtlasRect* r = ImFontAtlasPackGetRect(atlas, pack_id);
+        ImTextureRect* r = ImFontAtlasPackGetRect(atlas, pack_id);
 
         ImFontGlyph glyph_in = {};
         ImFontGlyph* glyph = &glyph_in;
@@ -543,7 +547,7 @@ void LoadProceduralFont(float scale)
     ImFontConfig font_noto;
     //strcpy(font_noto.Name, "procedural");
     //font_noto.MergeMode = true;
-    //io.Fonts->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 20.0f * scale, &font_noto);
+    //atlas->AddFontFromFileTTF("../../../fonts/NotoSans-Regular.ttf", 20.0f * scale, &font_noto);
 
     ImFontConfig empty_font;
     strcpy(empty_font.Name, "procedural");
@@ -736,11 +740,35 @@ static void ShowTexUpdateDebugWindow()
     // Toy with legacy AddCustomRectXXX api
     if (ImGui::TreeNode("Custom Rect API"))
     {
+        if (ImGui::Button("Add Image"))
+        {
+            data->CustomRectImage = atlas->AddCustomRectRegular(200, 200);
+            const ImTextureRect* r = atlas->GetCustomRect(data->CustomRectImage);
+            unsigned char* pixels = atlas->TexData->GetPixelsAt(r->x, r->y);
+            for (int y = 0; y < r->h; y++)
+            {
+                for (int x = 0; x < r->w; x++)
+                {
+                    float d = ImSqrt(ImLengthSqr({ ImFabs(r->w * 0.5f - x), ImFabs(r->h * 0.5f - y) }));
+                    int alpha = (int)ImLinearRemapClamp(80, 95, 255, 0, d);
+                    ((ImU32*)pixels)[x] = IM_COL32(120, 255, 120, alpha);
+                }
+                pixels += atlas->TexData->GetPitch();
+            }
+        }
+        if (data->CustomRectImage != -1)
+        {
+            const ImTextureRect* r = atlas->GetCustomRect(data->CustomRectImage);
+            ImVec2 uv0, uv1;
+            atlas->GetCustomRectUV(r, &uv0, &uv1);
+            ImGui::Image(atlas->TexID, ImVec2(r->w, r->h), uv0, uv1);
+        }
+
         ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
         if (ImGui::Button("Add Custom Rect"))
         {
-            const int r_idx = atlas->AddCustomRectRegular(10, 10);
-            const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
+            const int r_id = atlas->AddCustomRectRegular(10, 10);
+            const ImTextureRect* r = atlas->GetCustomRect(r_id);
             unsigned char* pixels = atlas->TexData->GetPixelsAt(r->x, r->y);
 
             ImU32 col = 0;
@@ -751,7 +779,7 @@ static void ShowTexUpdateDebugWindow()
             case 2: col = IM_COL32(0, 0, 255, 255); break;
             case 3: col = IM_COL32(255, 0, 255, 255); break;
             }
-            data->CustomRects.push_back(r_idx);
+            data->CustomRects.push_back(r_id);
             for (int y = 0; y < r->h; y++)
             {
                 for (int x = 0; x < r->w; x++)
@@ -765,9 +793,9 @@ static void ShowTexUpdateDebugWindow()
         }
         for (int r_idx : data->CustomRects)
         {
-            const ImTextureRect* r = atlas->GetCustomRectByIndex(r_idx);
+            const ImTextureRect* r = atlas->GetCustomRect(r_idx);
             ImVec2 uv_min, uv_max;
-            atlas->CalcCustomRectUV(r, &uv_min, &uv_max);
+            atlas->GetCustomRectUV(r, &uv_min, &uv_max);
             ImGui::BulletText("CustomRect id %04d", r_idx);
             ImGui::SameLine();
             ImGui::Image(atlas->TexID, ImVec2(r->w, r->h), uv_min, uv_max);
@@ -776,23 +804,6 @@ static void ShowTexUpdateDebugWindow()
         ImGui::PopItemFlag();
         ImGui::TreePop();
     }
-
-#ifdef IMGUI_ENABLE_FREETYPE
-    if (ImGui::TreeNode("FreeType Builder Flags"))
-    {
-        want_rebuild |= ImGui::CheckboxFlags("NoHinting", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_NoHinting);
-        want_rebuild |= ImGui::CheckboxFlags("NoAutoHint", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_NoAutoHint);
-        want_rebuild |= ImGui::CheckboxFlags("ForceAutoHint", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_ForceAutoHint);
-        want_rebuild |= ImGui::CheckboxFlags("LightHinting", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_LightHinting);
-        want_rebuild |= ImGui::CheckboxFlags("MonoHinting", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_MonoHinting);
-        want_rebuild |= ImGui::CheckboxFlags("Bold", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Bold);
-        want_rebuild |= ImGui::CheckboxFlags("Oblique", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Oblique);
-        want_rebuild |= ImGui::CheckboxFlags("Monochrome", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Monochrome);
-        want_rebuild |= ImGui::CheckboxFlags("LoadColor", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_LoadColor);
-        want_rebuild |= ImGui::CheckboxFlags("Bitmap", &data->FreeTypeBuilderFlags, ImGuiFreeTypeBuilderFlags_Bitmap);
-        ImGui::TreePop();
-    }
-#endif
 
     ImGui::Separator();
 
@@ -809,18 +820,18 @@ static void ShowTexUpdateDebugWindow()
 #ifdef IMGUI_ENABLE_STB_TRUETYPE
         if (data->BuildMode == FontDemoBuildMode_Stb)
         {
-            atlas->FontBuilderFlags = 0;
+            ImFontAtlasBuildSetupFontLoader(atlas, NULL);
             ImFontAtlasBuildSetupFontLoader(atlas, ImFontAtlasGetFontLoaderForStbTruetype());
         }
 #endif
 #ifdef IMGUI_ENABLE_FREETYPE
         if (data->BuildMode == FontDemoBuildMode_FreeType)
         {
-            atlas->FontBuilderFlags = data->FreeTypeBuilderFlags;
+            ImFontAtlasBuildSetupFontLoader(atlas, NULL);
             ImFontAtlasBuildSetupFontLoader(atlas, ImGuiFreeType::GetFontLoader());
         }
 #endif
-        ImFontAtlasBuildClearTexture(atlas);
+        //ImFontAtlasBuildClearTexture(atlas);
         data->CustomRects.clear();
     }
 
@@ -831,6 +842,10 @@ static void ShowTexUpdateDebugWindow()
     if (io.Fonts->TexList.Size > 1)
         ::Sleep(500);
 #endif
+
+    ImGui::ShowFontAtlas(atlas);
+
+    /*
 
     ImGui::SameLine();
     if (ImGui::Button("Compact"))
@@ -854,7 +869,7 @@ static void ShowTexUpdateDebugWindow()
     }
 
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-    ImGui::DebugNodeTexture(atlas->TexData);
+    ImGui::DebugNodeTexture(atlas->TexData, 0);
     //{
     //    ImTextureData* tex = atlas->TexData;
     //    ImGui::Image(atlas->TexID, ImVec2((float)tex->Width, (float)tex->Height), { 0,0 }, { 1,1 }, { 1,1,1,1 }, { 0.5f, 0.5f, 0.5f, 1.0f });
@@ -863,6 +878,7 @@ static void ShowTexUpdateDebugWindow()
     //const int surface_sqrt = (int)sqrtf((float)atlas->_PackedSurface);
     //ImGui::Text("Used area: about %d px ~%dx%d px", atlas->_PackedSurface, surface_sqrt, surface_sqrt);
     //ImGui::Text("Packed %d rects", atlas->_PackedRects);
+    */
 
     ImGui::End();
 
