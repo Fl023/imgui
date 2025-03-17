@@ -316,19 +316,21 @@ IM_MSVC_RUNTIME_CHECKS_RESTORE
 // [SECTION] Texture identifiers (ImTextureID, ImTextureUserID)
 //-----------------------------------------------------------------------------
 
-// ImTextureUserID: user data for renderer backend to identify a texture [Compile-time configurable type]
+// ImTextureUserID: backend specific, low-level identifier for a texture uploaded in GPU/graphics system. [Compile-time configurable type]
 // Overview:
-// - Backend and user/app code provides ImTextureUserID values that gets stored inside draw commands (ImDrawCmd) during the ImGui frame.
-// - Backend uses ImDrawCmd::GetTexID() to retrieve the ImTextureUserID value during rendering. Then, they can bind the textures of each draw command.
+// - When a Rendered Backend creates a texture, it store its native identifier into a ImTextureUserID value.
+//   (e.g. Used by DX11 backend to a `ID3D11ShaderResourceView*`; Used by OpenGL backends to store `GLuint'; Used by SDLGPU backend to store a `SDL_GPUTextureSamplerBinding*`).
+// - User may submit their own textures to e.g. ImGui::Image() function by passing the same type of identifier.
+// - During the rendering loop, the Renderer Backend retrieve the ImTextureUserID, which stored inside ImTextureID, which is stored inside ImDrawCmd.
 // Configuring the type:
-// - To use something else than a 64-bit value: override with e.g. '#define ImTextureUserID MyTextureType*' in your imconfig.h file.
+// - To use something other than a 64-bit value: override with e.g. '#define ImTextureUserID MyTextureType*' in your imconfig.h file.
 // - This can be whatever to you want it to be! read the FAQ entry about textures for details.
 // - You may decide to store a higher-level structure containing texture, sampler, shader etc. with various constructors if you like. You will need to implement ==/!= operators.
 // History:
 // - In v1.91.4 (2024/10/08): the default type for ImTextureID was changed from 'void*' to 'ImU64'. This allowed backends requirig 64-bit worth of data to build on 32-bit architectures. Use intermediary intptr_t cast and read FAQ if you have casting warnings.
 // - In v1.92.0 (2025/XX/XX): ImTextureID was renamed to ImTextureUserID. ImTextureID still exist but isn't user-defined.
-// - If you have a pre-1.92 custom backend: you can also change ImTextureID to ImTextureUserID for consistency. We allow ImTextureID to be constructed from ImTextureUserID for convenience.
-// - ImDrawCmd::GetTexID() previously returned ImTextureID, it now returns ImTextureUserID. It may be transparent to some. This was designed to maximize syntax compatiblity with old backends.
+// - If you used a #define to compile-time configure the type, you should use the new name.
+// - If you have a pre-1.92 custom backend: you can also change ImTextureID to ImTextureUserID inside backend code. Also read comments about ImDrawCmd::GetTexID() being changed to ImDrawCmd::GetTexUserID().
 #ifdef ImTextureID
 #error Change '#define ImTextureID xxxx' to '#define ImTextureUserID xxxx'!
 #undef ImTextureID
@@ -336,16 +338,14 @@ IM_MSVC_RUNTIME_CHECKS_RESTORE
 #ifndef ImTextureUserID
 typedef ImU64 ImTextureUserID;      // Default: store up to 64-bits (any pointer or integer). A majority of backends are ok with that.
 #endif
-// Define this to another value if you need value of 0 to be valid.
-#ifndef ImTextureUserID_Invalid
-#define ImTextureUserID_Invalid     ((ImTextureUserID)0)
-#endif
 
-// ImTextureID contains:
-// -    a ImTextureUserID value (user/backend identifier), typically when created by user code to load images.
-// - OR a texture/atlas pointer, typically when created by Dear ImGui itself.
-// There is no constructor to create a ImTextureID from a ImTextureData* as we don't expect this to be useful to the end-user.
-// If you wrap the library from another language than C++: the functions taking ImTextureID would directly better take ImTextureUserID in your language binding.
+// ImTextureID = higher-level identifier for a texture. The identifier is valid even before the texture has been uploaded to the GPU/graphics system.
+// This is what gets passed to functions such as ImGui::Image().
+// This is what gets stored in draw commands (ImDrawCmd) to identify a texture during rendering.
+// - When a texture is created by user code (e.g. custom images), we directly stores the low-level ImTextureUserID.
+// - When a texture is created by the backend, we stores a ImTextureData* which becomes an indirection to extract the ImTextureUserID value during rendering.
+// - There is no constructor to create a ImTextureID from a ImTextureData* as we don't expect this to be useful to the end-user.
+// - If you wrap the library from another language than C++: most users will either create this from a ImTextureID or copy ImFontAtlas->TexID.
 IM_MSVC_RUNTIME_CHECKS_OFF
 struct ImTextureID
 {
@@ -355,10 +355,11 @@ struct ImTextureID
     ImTextureID(void* tex_user_id)           { memset(this, 0, sizeof(*this)); _TexUserID = (ImTextureUserID)(size_t)tex_user_id; } // For legacy backends casting to ImTextureID
     //inline operator intptr_t() const       { return (intptr_t)_TexUserID; }                                                       // For legacy backends casting to ImTextureID
 #endif
+    inline ImTextureUserID GetTexUserID() const; // == (_TexData ? _TexData->TexUserID : _TexUserID) // Implemented below in the file.
 
-    // Members
+    // Members (either are set, never both!)
     ImTextureUserID     _TexUserID;     // Underlying texture identifier for backend, if already uploaded (otherwise pulled from _TexData)
-    ImTextureData*      _TexData;       // Texture, generally owned by a ImFontAtlas
+    ImTextureData*      _TexData;       // _OR_ Texture, generally owned by a ImFontAtlas. Will convert to ImTextureUserID during render loop, after textures have been uploaded.
 };
 IM_MSVC_RUNTIME_CHECKS_RESTORE
 
@@ -2917,7 +2918,8 @@ static inline bool    operator!=(const ImVec4& lhs, const ImVec4& rhs)  { return
 IM_MSVC_RUNTIME_CHECKS_RESTORE
 #endif
 
-// Helpers: ImTexture ==/!= operators provided as convenience (not strictly necessary)
+// Helpers: ImTexture ==/!= operators provided as convenience
+// (note that _TexUserID and _TexData are never set simultaneously)
 static inline bool operator==(const ImTextureID& lhs, const ImTextureID& rhs) { return lhs._TexUserID == rhs._TexUserID && lhs._TexData == rhs._TexData; }
 static inline bool operator!=(const ImTextureID& lhs, const ImTextureID& rhs) { return lhs._TexUserID != rhs._TexUserID || lhs._TexData != rhs._TexData; }
 //#ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS // For legacy backends
@@ -3171,12 +3173,12 @@ struct ImDrawCmd
     ImDrawCmd()     { memset(this, 0, sizeof(*this)); } // Also ensure our padding fields are zeroed
 
     // Since 1.83: returns ImTextureUserID associated with this draw call. Warning: DO NOT assume this is always same as 'TextureId' (we will change this function for an upcoming feature)
-    // Since 1.92: this is now definitively different from reading the 'TextureId' field!
-    // This essentially doing: 'return TextureId._TexData ? TextureId._TexData->TexUserID : TextureId._TexUserID'.
-    // If for some reason you non C++ tech stack makes it difficult to call it, we may decide to separate the fields in ImDrawCmd.
+    // Since 1.92: renamed GetTexID() -> GetTexUserID() for consistency.
+    // - This is now definitively different from reading the 'TextureId' field!
+    // - This is essentially doing: 'return TextureId._TexData ? TextureId._TexData->TexUserID : TextureId._TexUserID'.
     inline ImTextureUserID GetTexUserID() const;
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
-    ImTextureUserID GetTexID() const { return GetTexUserID(); }
+    ImTextureUserID GetTexID() const { return GetTexUserID(); } // OBSOLETED in 1.92. This previously returned ImTextureID. We changed the return type but ImTextureID may be constructed from ImTextureUserID.
 #endif
 };
 
@@ -3443,8 +3445,17 @@ struct ImDrawData
 };
 
 //-----------------------------------------------------------------------------
-// [SECTION] Texture API (ImTextureFormat, ImTextureStatus, ImTextureRect, ImTextureData
+// [SECTION] Texture API (ImTextureFormat, ImTextureStatus, ImTextureRect, ImTextureData)
 //-----------------------------------------------------------------------------
+// In principle, the only data types that user/application code should care about are 'ImTextureID' and 'ImTextureUserID'.
+// They are defined above in this header file. Read their description to the difference between ImTextureID and ImTextureUserID.
+// FOR ALL OTHER ImTextureXXXX TYPES: ONLY CORE LIBRARY AND RENDERER BACKENDS NEED TO KNOW AND CARE ABOUT THEM.
+//-----------------------------------------------------------------------------
+
+// Define this if you need 0 to be a valid ImTextureUserID.
+#ifndef ImTextureUserID_Invalid
+#define ImTextureUserID_Invalid     ((ImTextureUserID)0)
+#endif
 
 // We intentionally support a limited amount of texture formats to limit burden on CPU-side code and extension.
 // Most standard backends only support RGBA32 but we provide a single channel option for low-resource/embedded systems.
@@ -3454,7 +3465,7 @@ enum ImTextureFormat
     ImTextureFormat_Alpha8,         // 1 component per pixel, each is unsigned 8-bit. Total size = TexWidth * TexHeight
 };
 
-// Status of a texture
+// Status of a texture to communicate with Renderer Backend.
 enum ImTextureStatus
 {
     ImTextureStatus_OK,
@@ -3465,7 +3476,7 @@ enum ImTextureStatus
 };
 
 // Coordinates of a rectangle within a texture.
-// When a texture is in ImTextureStatus_WantUpdates state, we provide a list of individual rectangles to copy to GPU texture.
+// When a texture is in ImTextureStatus_WantUpdates state, we provide a list of individual rectangles to copy to the graphics system.
 // You may use ImTextureData::Updates[] for the list, or ImTextureData::UpdateBox for a single bounding box.
 struct ImTextureRect
 {
@@ -3474,7 +3485,8 @@ struct ImTextureRect
 };
 
 // Specs and pixel storage for a texture used by Dear ImGui.
-// The renderer backend will generally create a GPU-side version of this.
+// This is only useful for (1) core library and (2) backends. End-user/applications do not need to care about this.
+// Renderer Backends will create a GPU-side version of this.
 // Why does we store two identifiers: TexUserID and BackendUserData?
 // - ImTextureUserID TexUserID       = lower-level identifier stored in ImDrawCmd. ImDrawCmd can refer to textures not created by the backend, and for which there's no ImTextureData.
 // - void*           BackendUserData = higher-level opaque storage for backend own book-keeping. Some backends may have enough with TexUserID and not need both.
@@ -3703,9 +3715,11 @@ struct ImFontAtlas
     int                         TexMaxHeight;       // Maximum desired texture height. Must be a power of two. Default to 8096.
     void*                       UserData;           // Store your own atlas related user-data (if e.g. you have multiple font atlas).
 
-    // [Internal]
+    // Output
     ImTextureID                 TexID;              // Current texture identifier == TexData->GetTexID().
-    ImTextureData*              TexData;            // Current texture
+    ImTextureData*              TexData;            // Current texture.
+
+    // [Internal]
     ImVector<ImTextureData*>    TexList;            // Texture list (most often TexList.Size == 1). TexData is always == TexList.back(). DO NOT USE DIRECTLY, USE GetPlatformIO().Textures[] instead!
     bool                        Locked;             // Marked as locked during ImGui::NewFrame()..EndFrame() scope if TexUpdates are not supported. Any attempt to modify the atlas will assert.
     bool                        RendererHasTextures;// Copy of (BackendFlags & ImGuiBackendFlags_RendererHasTextures) from supporting context.
@@ -3718,10 +3732,8 @@ struct ImFontAtlas
     ImVec4                      TexUvLines[IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1];  // UVs for baked anti-aliased lines
     int                         TexNextUniqueID;    // Next value to be stored in TexData->UniqueID
     int                         FontNextUniqueID;   // Next value to be stored in ImFont->SourceID
-    ImVector<ImDrawListSharedData*> DrawListSharedDatas;
-
-    // [Internal] Font builder
-    ImFontAtlasBuilder*         Builder;            // Opaque interface to our data that doesn't need to be public
+    ImVector<ImDrawListSharedData*> DrawListSharedDatas; // List of users for this atlas. Typically one per Dear ImGui context.
+    ImFontAtlasBuilder*         Builder;            // Opaque interface to our data that doesn't need to be public and may be discarded when rebuilding.
     const ImFontLoader*         FontLoader;         // Font loader opaque interface (default to stb_truetype, can be changed to use FreeType by defining IMGUI_ENABLE_FREETYPE). Don't set directly!
     const char*                 FontLoaderName;     // Font loader name (for display e.g. in About box) == FontLoader->Name
     void*                       FontLoaderData;     // Font backend opaque storage
@@ -3832,13 +3844,16 @@ struct ImFont
     IMGUI_API bool              IsGlyphRangeUnused(unsigned int c_begin, unsigned int c_last);
 };
 
-// Added indirection to avoid patching ImDrawCmd after texture updates.
+// We added an indirection to avoid patching ImDrawCmd after texture updates but this could be a solution too.
+inline ImTextureUserID ImTextureID::GetTexUserID() const
+{
+    return _TexData ? _TexData->TexUserID : _TexUserID;
+}
 inline ImTextureUserID ImDrawCmd::GetTexUserID() const
 {
-    ImTextureUserID tex_id = TextureId._TexData ? TextureId._TexData->TexUserID : TextureId._TexUserID;
-    if (TextureId._TexData != NULL)
-        IM_ASSERT(tex_id != ImTextureUserID_Invalid && "ImDrawCmd is referring to ImTextureData that wasn't uploaded to graphics system. Backend must call ImTextureData::SetTexUserID()!");
-    return tex_id;
+    ImTextureUserID tex_user_id = TextureId._TexData ? TextureId._TexData->TexUserID : TextureId._TexUserID;
+    IM_ASSERT((TextureId._TexData == NULL || tex_user_id != ImTextureUserID_Invalid) && "ImDrawCmd is referring to ImTextureData that wasn't uploaded to graphics system. Backend must call ImTextureData::SetTexUserID()!");
+    return tex_user_id;
 }
 
 //-----------------------------------------------------------------------------
