@@ -339,6 +339,11 @@ IM_MSVC_RUNTIME_CHECKS_RESTORE
 typedef ImU64 ImTextureUserID;      // Default: store up to 64-bits (any pointer or integer). A majority of backends are ok with that.
 #endif
 
+// Define this if you need 0 to be a valid ImTextureUserID.
+#ifndef ImTextureUserID_Invalid
+#define ImTextureUserID_Invalid     ((ImTextureUserID)0)
+#endif
+
 // ImTextureID = higher-level identifier for a texture. The identifier is valid even before the texture has been uploaded to the GPU/graphics system.
 // This is what gets passed to functions such as ImGui::Image().
 // This is what gets stored in draw commands (ImDrawCmd) to identify a texture during rendering.
@@ -349,11 +354,11 @@ typedef ImU64 ImTextureUserID;      // Default: store up to 64-bits (any pointer
 IM_MSVC_RUNTIME_CHECKS_OFF
 struct ImTextureID
 {
-    ImTextureID()                            { memset(this, 0, sizeof(*this)); }
-    ImTextureID(ImTextureUserID tex_user_id) { memset(this, 0, sizeof(*this)); _TexUserID = tex_user_id; }
+    ImTextureID()                            { _TexUserID = ImTextureUserID_Invalid; _TexData = NULL; }
+    ImTextureID(ImTextureUserID tex_user_id) { _TexUserID = tex_user_id; _TexData = NULL; }
 #if !defined(IMGUI_DISABLE_OBSOLETE_FUNCTIONS) && !defined(ImTextureUserID)
-    ImTextureID(void* tex_user_id)           { memset(this, 0, sizeof(*this)); _TexUserID = (ImTextureUserID)(size_t)tex_user_id; } // For legacy backends casting to ImTextureID
-    //inline operator intptr_t() const       { return (intptr_t)_TexUserID; }                                                       // For legacy backends casting to ImTextureID
+    ImTextureID(void* tex_user_id)           { _TexUserID = (ImTextureUserID)(size_t)tex_user_id; _TexData = NULL; } // For legacy backends casting to ImTextureID
+    //inline operator intptr_t() const       { return (intptr_t)_TexUserID; }                                        // For legacy backends casting to ImTextureID
 #endif
     inline ImTextureUserID GetTexUserID() const; // == (_TexData ? _TexData->TexUserID : _TexUserID) // Implemented below in the file.
 
@@ -3452,11 +3457,6 @@ struct ImDrawData
 // FOR ALL OTHER ImTextureXXXX TYPES: ONLY CORE LIBRARY AND RENDERER BACKENDS NEED TO KNOW AND CARE ABOUT THEM.
 //-----------------------------------------------------------------------------
 
-// Define this if you need 0 to be a valid ImTextureUserID.
-#ifndef ImTextureUserID_Invalid
-#define ImTextureUserID_Invalid     ((ImTextureUserID)0)
-#endif
-
 // We intentionally support a limited amount of texture formats to limit burden on CPU-side code and extension.
 // Most standard backends only support RGBA32 but we provide a single channel option for low-resource/embedded systems.
 enum ImTextureFormat
@@ -3662,7 +3662,7 @@ struct ImFontAtlas
     // Glyph Ranges
     //-------------------------------------------
 
-    // Since 1.92: specifying glyph ranges is only useful/necessary if your backend doesn't support ImGuiBackendFlags_HasTextures!
+    // Since 1.92: specifying glyph ranges is only useful/necessary if your backend doesn't support ImGuiBackendFlags_RendererHasTextures!
     IMGUI_API const ImWchar*    GetGlyphRangesDefault();                // Basic Latin, Extended Latin
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
     // Helpers to retrieve list of common Unicode ranges (2 value per range, values are inclusive, zero-terminated list)
@@ -3825,7 +3825,7 @@ struct ImFont
     IMGUI_API ImFontBaked*      GetFontBaked(float font_size);  // Get or create baked data for given size
     IMGUI_API bool              IsGlyphInFont(ImWchar c);
     bool                        IsLoaded() const                { return ContainerAtlas != NULL; }
-    const char*                 GetDebugName() const            { return Sources ? Sources[0].Name : "<unknown>"; }
+    const char*                 GetDebugName() const            { return Sources ? Sources[0].Name : "<unknown>"; } // Fill ImFontConfig::Name.
 
     // [Internal] Don't use!
     // 'max_width' stops rendering after a certain width (could be turned into a 2d size). FLT_MAX to disable.
