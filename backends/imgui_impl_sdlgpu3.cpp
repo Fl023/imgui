@@ -2,7 +2,7 @@
 // This needs to be used along with the SDL3 Platform Backend
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'SDL_GPUTextureSamplerBinding*' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'SDL_GPUTextureSamplerBinding*' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) with 16-bit indices.
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 // Missing features:
@@ -270,7 +270,7 @@ void ImGui_ImplSDLGPU3_RenderDrawData(ImDrawData* draw_data, SDL_GPUCommandBuffe
                 SDL_SetGPUScissor(render_pass,&scissor_rect);
 
                 // Bind DescriptorSet with font or user texture
-                SDL_BindGPUFragmentSamplers(render_pass, 0, (SDL_GPUTextureSamplerBinding*)pcmd->GetTexUserID(), 1);
+                SDL_BindGPUFragmentSamplers(render_pass, 0, (SDL_GPUTextureSamplerBinding*)pcmd->GetTexID(), 1);
 
                 // Draw
                 SDL_DrawGPUIndexedPrimitives(render_pass, pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, pcmd->VtxOffset + global_vtx_offset, 0);
@@ -297,7 +297,7 @@ void ImGui_ImplSDLGPU3_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         ImGui_ImplSDLGPU3_Texture* backend_tex = IM_NEW(ImGui_ImplSDLGPU3_Texture)();
 
@@ -318,7 +318,7 @@ void ImGui_ImplSDLGPU3_UpdateTexture(ImTextureData* tex)
         IM_ASSERT(backend_tex->Texture && "Failed to create font texture, call SDL_GetError() for more info");
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)&backend_tex->TextureSamplerBinding);
+        tex->SetTexID((ImTextureID)(intptr_t)&backend_tex->TextureSamplerBinding);
         tex->BackendUserData = backend_tex;
     }
 
@@ -382,7 +382,7 @@ void ImGui_ImplSDLGPU3_UpdateTexture(ImTextureData* tex)
         IM_DELETE(backend_tex);
 
         // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-        tex->SetTexUserID(ImTextureUserID_Invalid);
+        tex->SetTexID(ImTextureID_Invalid);
         tex->BackendUserData = nullptr;
         tex->Status = ImTextureStatus_Destroyed;
     }

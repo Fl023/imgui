@@ -2,7 +2,7 @@
 // This needs to be used along with a Platform Backend (e.g. GLFW, SDL, Win32, custom..)
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'GLuint' OpenGL texture as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'GLuint' OpenGL texture as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: Multi-viewport support (multiple windows). Enable with 'io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable'.
 // Missing features or Issues:
@@ -248,7 +248,7 @@ void ImGui_ImplOpenGL2_RenderDrawData(ImDrawData* draw_data)
                 glScissor((int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y));
 
                 // Bind texture, Draw
-                glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)pcmd->GetTexUserID());
+                glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)pcmd->GetTexID());
                 glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, idx_buffer + pcmd->IdxOffset);
             }
         }
@@ -277,7 +277,7 @@ void ImGui_ImplOpenGL2_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == 0 && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == 0 && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         const void* pixels = tex->GetPixels();
         GLuint gl_texture_id = 0;
@@ -296,7 +296,7 @@ void ImGui_ImplOpenGL2_UpdateTexture(ImTextureData* tex)
         GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->Width, tex->Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels));
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)gl_texture_id);
+        tex->SetTexID((ImTextureID)(intptr_t)gl_texture_id);
         tex->Status = ImTextureStatus_OK;
 
         // Restore state
@@ -309,7 +309,7 @@ void ImGui_ImplOpenGL2_UpdateTexture(ImTextureData* tex)
         GLint last_texture;
         GL_CALL(glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_texture));
 
-        GLuint gl_texture_id = (GLuint)(intptr_t)tex->TexUserID;
+        GLuint gl_texture_id = (GLuint)(intptr_t)tex->TexID;
         GL_CALL(glBindTexture(GL_TEXTURE_2D, gl_texture_id));
         GL_CALL(glPixelStorei(GL_UNPACK_ROW_LENGTH, tex->Width));
         for (ImTextureRect& r : tex->Updates)
@@ -320,11 +320,11 @@ void ImGui_ImplOpenGL2_UpdateTexture(ImTextureData* tex)
     }
     else if (tex->Status == ImTextureStatus_WantDestroy)
     {
-        GLuint gl_tex_id = (GLuint)(intptr_t)tex->TexUserID;
+        GLuint gl_tex_id = (GLuint)(intptr_t)tex->TexID;
         glDeleteTextures(1, &gl_tex_id);
 
         // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-        tex->SetTexUserID(ImTextureUserID_Invalid);
+        tex->SetTexID(ImTextureID_Invalid);
         tex->Status = ImTextureStatus_Destroyed;
     }
 }

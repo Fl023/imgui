@@ -411,9 +411,9 @@ CODE
                  // - Note that pcmd->ClipRect contains Min+Max bounds. Some graphics API may use Min+Max, other may use Min+Size (size being Max-Min)
                  MyEngineSetScissor(clip_min.x, clip_min.y, clip_max.x, clip_max.y);
 
-                 // The texture for the draw call is specified by pcmd->GetTexUserID().
+                 // The texture for the draw call is specified by pcmd->GetTexID().
                  // The vast majority of draw calls will use the Dear ImGui texture atlas, which value you have set yourself during initialization.
-                 MyEngineBindTexture((MyTexture*)pcmd->GetTexUserID());
+                 MyEngineBindTexture((MyTexture*)pcmd->GetTexID());
 
                  // Render 'pcmd->ElemCount/3' indexed triangles.
                  // By default the indices ImDrawIdx are 16-bit, you can change them to 32-bit in imconfig.h if your engine doesn't support 16-bit indices.
@@ -3894,12 +3894,12 @@ void ImGui::RenderMouseCursor(ImVec2 base_pos, float base_scale, ImGuiMouseCurso
         if (!viewport->GetMainRect().Overlaps(ImRect(pos, pos + ImVec2(size.x + 2, size.y + 2) * scale)))
             continue;
         ImDrawList* draw_list = GetForegroundDrawList(viewport);
-        ImTextureID tex_id = font_atlas->TexID;
-        draw_list->PushTextureID(tex_id);
-        draw_list->AddImage(tex_id, pos + ImVec2(1, 0) * scale, pos + (ImVec2(1, 0) + size) * scale, uv[2], uv[3], col_shadow);
-        draw_list->AddImage(tex_id, pos + ImVec2(2, 0) * scale, pos + (ImVec2(2, 0) + size) * scale, uv[2], uv[3], col_shadow);
-        draw_list->AddImage(tex_id, pos,                        pos + size * scale,                  uv[2], uv[3], col_border);
-        draw_list->AddImage(tex_id, pos,                        pos + size * scale,                  uv[0], uv[1], col_fill);
+        ImTextureRef tex_ref = font_atlas->TexRef;
+        draw_list->PushTexture(tex_ref);
+        draw_list->AddImage(tex_ref, pos + ImVec2(1, 0) * scale, pos + (ImVec2(1, 0) + size) * scale, uv[2], uv[3], col_shadow);
+        draw_list->AddImage(tex_ref, pos + ImVec2(2, 0) * scale, pos + (ImVec2(2, 0) + size) * scale, uv[2], uv[3], col_shadow);
+        draw_list->AddImage(tex_ref, pos,                        pos + size * scale,                  uv[2], uv[3], col_border);
+        draw_list->AddImage(tex_ref, pos,                        pos + size * scale,                  uv[0], uv[1], col_fill);
         if (mouse_cursor == ImGuiMouseCursor_Wait || mouse_cursor == ImGuiMouseCursor_Progress)
         {
             float a_min = ImFmod((float)g.Time * 5.0f, 2.0f * IM_PI);
@@ -3907,7 +3907,7 @@ void ImGui::RenderMouseCursor(ImVec2 base_pos, float base_scale, ImGuiMouseCurso
             draw_list->PathArcTo(pos + ImVec2(14, -1) * scale, 6.0f * scale, a_min, a_max);
             draw_list->PathStroke(col_fill, ImDrawFlags_None, 3.0f * scale);
         }
-        draw_list->PopTextureID();
+        draw_list->PopTexture();
     }
 }
 
@@ -5030,7 +5030,7 @@ static ImDrawList* GetViewportBgFgDrawList(ImGuiViewportP* viewport, size_t draw
     if (viewport->BgFgDrawListsLastFrame[drawlist_no] != g.FrameCount)
     {
         draw_list->_ResetForNewFrame();
-        draw_list->PushTextureID(g.IO.Fonts->TexID);
+        draw_list->PushTexture(g.IO.Fonts->TexRef);
         draw_list->PushClipRect(viewport->Pos, viewport->Pos + viewport->Size, false);
         viewport->BgFgDrawListsLastFrame[drawlist_no] = g.FrameCount;
     }
@@ -8124,7 +8124,7 @@ bool ImGui::Begin(const char* name, bool* p_open, ImGuiWindowFlags flags)
 
         // Setup draw list and outer clipping rectangle
         IM_ASSERT(window->DrawList->CmdBuffer.Size == 1 && window->DrawList->CmdBuffer[0].ElemCount == 0);
-        window->DrawList->PushTextureID(g.Font->ContainerAtlas->TexID);
+        window->DrawList->PushTexture(g.Font->ContainerAtlas->TexRef);
         PushClipRect(host_rect.Min, host_rect.Max, false);
 
         // Child windows can render their decoration (bg color, border, scrollbars, etc.) within their parent to save a draw call (since 1.71)
@@ -8479,10 +8479,10 @@ void ImGui::End()
 }
 
 // Use ImDrawList::_SetTextureID(), making our shared g.FontStack[] authorative against window-local ImDrawList.
-// - Whereas ImDrawList::PushTextureID()/PopTextureID() is not to be used across Begin() calls.
+// - Whereas ImDrawList::PushTexture()/PopTexture() is not to be used across Begin() calls.
 // - Note that we don't propagate current texture id when e.g. Begin()-ing into a new window, we never really did...
 //   - Some code paths never really fully worked with multiple atlas textures.
-//   - The right-ish solution may be to remove _SetTextureID() and make AddText/RenderText lazily call PushTextureID()/PopTextureID()
+//   - The right-ish solution may be to remove _SetTextureID() and make AddText/RenderText lazily call PushTexture()/PopTexture()
 //     the same way AddImage() does, but then all other primitives would also need to? I don't think we should tackle this problem
 //     because we have a concrete need and a test bed for multiple atlas textures.
 // FIXME-NEWATLAS-V2: perhaps we can now leverage ImFontAtlasUpdateDrawListsTextures() ?
@@ -8500,7 +8500,7 @@ void ImGui::SetCurrentFont(ImFont* font, float font_size)
         g.DrawListSharedData.Font = g.Font;
         ImFontAtlasUpdateDrawListsSharedData(g.Font->ContainerAtlas);
         if (g.CurrentWindow != NULL)
-            g.CurrentWindow->DrawList->_SetTextureID(font->ContainerAtlas->TexID);
+            g.CurrentWindow->DrawList->_SetTextureRef(font->ContainerAtlas->TexRef);
     }
 }
 
@@ -21196,7 +21196,7 @@ void ImGui::UpdateDebugToolFlashStyleColor()
         DebugFlashStyleColorStop();
 }
 
-static const char* FormatTextureIDForDebugDisplay(char* buf, int buf_size, ImTextureUserID tex_id)
+static const char* FormatTextureIDForDebugDisplay(char* buf, int buf_size, ImTextureID tex_id)
 {
     union { void* ptr; int integer; } tex_id_opaque;
     memcpy(&tex_id_opaque, &tex_id, ImMin(sizeof(void*), sizeof(tex_id)));
@@ -21210,9 +21210,9 @@ static const char* FormatTextureIDForDebugDisplay(char* buf, int buf_size, ImTex
 static const char* FormatTextureIDForDebugDisplay(char* buf, int buf_size, const ImDrawCmd* cmd)
 {
     char* buf_end = buf + buf_size;
-    if (cmd->TextureId._TexData != NULL)
-        buf += ImFormatString(buf, buf_end - buf, "#%03d: ", cmd->TextureId._TexData->UniqueID);
-    return FormatTextureIDForDebugDisplay(buf, (int)(buf_end - buf), cmd->GetTexUserID());
+    if (cmd->TexRef._TexData != NULL)
+        buf += ImFormatString(buf, buf_end - buf, "#%03d: ", cmd->TexRef._TexData->UniqueID);
+    return FormatTextureIDForDebugDisplay(buf, (int)(buf_end - buf), cmd->GetTexID());
 }
 
 // Avoid naming collision with imgui_demo.cpp's HelpMarker() for unity builds.
@@ -21336,14 +21336,14 @@ void ImGui::DebugNodeTexture(ImTextureData* tex, int int_id)
         if (tex->WantDestroyNextFrame)
             Dummy(ImVec2((float)tex->Width, (float)tex->Height));
         else
-            ImageWithBg(tex->GetTexID(), ImVec2((float)tex->Width, (float)tex->Height), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+            ImageWithBg(tex->GetTexRef(), ImVec2((float)tex->Width, (float)tex->Height), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
         if (cfg->ShowTextureUsedRect)
             GetWindowDrawList()->AddRect(ImVec2(p.x + tex->UsedRect.x, p.y + tex->UsedRect.y), ImVec2(p.x + tex->UsedRect.x + tex->UsedRect.w, p.y + tex->UsedRect.y + tex->UsedRect.h), IM_COL32(255, 0, 255, 255));
         PopStyleVar();
 
         char texid_desc[20];
         Text("Format = %s (%d)", ImTextureDataGetFormatName(tex->Format), tex->Format);
-        Text("TexUserID = %s", FormatTextureIDForDebugDisplay(texid_desc, IM_ARRAYSIZE(texid_desc), tex->TexUserID));
+        Text("TexID = %s", FormatTextureIDForDebugDisplay(texid_desc, IM_ARRAYSIZE(texid_desc), tex->TexID));
         Text("BackendUserData = %p", tex->BackendUserData);
         Text("UseColors = %d", tex->UseColors);
         TreePop();

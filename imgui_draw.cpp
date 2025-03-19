@@ -435,13 +435,13 @@ void ImDrawList::_SetDrawListSharedData(ImDrawListSharedData* data)
 }
 
 // Initialize before use in a new frame. We always have a command ready in the buffer.
-// In the majority of cases, you would want to call PushClipRect() and PushTextureID() after this.
+// In the majority of cases, you would want to call PushClipRect() and PushTexture() after this.
 void ImDrawList::_ResetForNewFrame()
 {
     // Verify that the ImDrawCmd fields we want to memcmp() are contiguous in memory.
     IM_STATIC_ASSERT(offsetof(ImDrawCmd, ClipRect) == 0);
-    IM_STATIC_ASSERT(offsetof(ImDrawCmd, TextureId) == sizeof(ImVec4));
-    IM_STATIC_ASSERT(offsetof(ImDrawCmd, VtxOffset) == sizeof(ImVec4) + sizeof(ImTextureID));
+    IM_STATIC_ASSERT(offsetof(ImDrawCmd, TexRef) == sizeof(ImVec4));
+    IM_STATIC_ASSERT(offsetof(ImDrawCmd, VtxOffset) == sizeof(ImVec4) + sizeof(ImTextureRef));
     if (_Splitter._Count > 1)
         _Splitter.Merge(this);
 
@@ -454,7 +454,7 @@ void ImDrawList::_ResetForNewFrame()
     _VtxWritePtr = NULL;
     _IdxWritePtr = NULL;
     _ClipRectStack.resize(0);
-    _TextureIdStack.resize(0);
+    _TextureStack.resize(0);
     _CallbacksDataBuf.resize(0);
     _Path.resize(0);
     _Splitter.Clear();
@@ -472,7 +472,7 @@ void ImDrawList::_ClearFreeMemory()
     _VtxWritePtr = NULL;
     _IdxWritePtr = NULL;
     _ClipRectStack.clear();
-    _TextureIdStack.clear();
+    _TextureStack.clear();
     _CallbacksDataBuf.clear();
     _Path.clear();
     _Splitter.ClearFreeMemory();
@@ -492,7 +492,7 @@ void ImDrawList::AddDrawCmd()
 {
     ImDrawCmd draw_cmd;
     draw_cmd.ClipRect = _CmdHeader.ClipRect;    // Same as calling ImDrawCmd_HeaderCopy()
-    draw_cmd.TextureId = _CmdHeader.TextureId;
+    draw_cmd.TexRef = _CmdHeader.TexRef;
     draw_cmd.VtxOffset = _CmdHeader.VtxOffset;
     draw_cmd.IdxOffset = IdxBuffer.Size;
 
@@ -595,7 +595,7 @@ void ImDrawList::_OnChangedTextureID()
     // If current command is used with different settings we need to add a new command
     IM_ASSERT_PARANOID(CmdBuffer.Size > 0);
     ImDrawCmd* curr_cmd = &CmdBuffer.Data[CmdBuffer.Size - 1];
-    if (curr_cmd->ElemCount != 0 && curr_cmd->TextureId != _CmdHeader.TextureId)
+    if (curr_cmd->ElemCount != 0 && curr_cmd->TexRef != _CmdHeader.TexRef)
     {
         AddDrawCmd();
         return;
@@ -612,7 +612,7 @@ void ImDrawList::_OnChangedTextureID()
         CmdBuffer.pop_back();
         return;
     }
-    curr_cmd->TextureId = _CmdHeader.TextureId;
+    curr_cmd->TexRef = _CmdHeader.TexRef;
 }
 
 void ImDrawList::_OnChangedVtxOffset()
@@ -673,28 +673,28 @@ void ImDrawList::PopClipRect()
     _OnChangedClipRect();
 }
 
-void ImDrawList::PushTextureID(ImTextureID texture_id)
+void ImDrawList::PushTexture(ImTextureRef texture_id)
 {
-    _TextureIdStack.push_back(texture_id);
-    _CmdHeader.TextureId = texture_id;
+    _TextureStack.push_back(texture_id);
+    _CmdHeader.TexRef = texture_id;
     if (texture_id._TexData != NULL)
         IM_ASSERT(texture_id._TexData->WantDestroyNextFrame == false);
     _OnChangedTextureID();
 }
 
-void ImDrawList::PopTextureID()
+void ImDrawList::PopTexture()
 {
-    _TextureIdStack.pop_back();
-    _CmdHeader.TextureId = (_TextureIdStack.Size == 0) ? ImTextureID() : _TextureIdStack.Data[_TextureIdStack.Size - 1];
+    _TextureStack.pop_back();
+    _CmdHeader.TexRef = (_TextureStack.Size == 0) ? ImTextureRef() : _TextureStack.Data[_TextureStack.Size - 1];
     _OnChangedTextureID();
 }
 
-// This is used by ImGui::PushFont()/PopFont(). It works because we never use _TextureIdStack[] elsewhere than in PushTextureID()/PopTextureID().
-void ImDrawList::_SetTextureID(ImTextureID texture_id)
+// This is used by ImGui::PushFont()/PopFont(). It works because we never use _TextureIdStack[] elsewhere than in PushTexture()/PopTexture().
+void ImDrawList::_SetTextureRef(ImTextureRef texture_id)
 {
-    if (_CmdHeader.TextureId == texture_id)
+    if (_CmdHeader.TexRef == texture_id)
         return;
-    _CmdHeader.TextureId = texture_id;
+    _CmdHeader.TexRef = texture_id;
     _OnChangedTextureID();
 }
 
@@ -1724,39 +1724,39 @@ void ImDrawList::AddText(const ImVec2& pos, ImU32 col, const char* text_begin, c
     AddText(_Data->Font, _Data->FontSize, pos, col, text_begin, text_end);
 }
 
-void ImDrawList::AddImage(ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col)
+void ImDrawList::AddImage(ImTextureRef tex_ref, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col)
 {
     if ((col & IM_COL32_A_MASK) == 0)
         return;
 
-    const bool push_texture_id = user_texture_id != _CmdHeader.TextureId;
+    const bool push_texture_id = tex_ref != _CmdHeader.TexRef;
     if (push_texture_id)
-        PushTextureID(user_texture_id);
+        PushTexture(tex_ref);
 
     PrimReserve(6, 4);
     PrimRectUV(p_min, p_max, uv_min, uv_max, col);
 
     if (push_texture_id)
-        PopTextureID();
+        PopTexture();
 }
 
-void ImDrawList::AddImageQuad(ImTextureID user_texture_id, const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, const ImVec2& uv1, const ImVec2& uv2, const ImVec2& uv3, const ImVec2& uv4, ImU32 col)
+void ImDrawList::AddImageQuad(ImTextureRef tex_ref, const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, const ImVec2& uv1, const ImVec2& uv2, const ImVec2& uv3, const ImVec2& uv4, ImU32 col)
 {
     if ((col & IM_COL32_A_MASK) == 0)
         return;
 
-    const bool push_texture_id = user_texture_id != _CmdHeader.TextureId;
+    const bool push_texture_id = tex_ref != _CmdHeader.TexRef;
     if (push_texture_id)
-        PushTextureID(user_texture_id);
+        PushTexture(tex_ref);
 
     PrimReserve(6, 4);
     PrimQuadUV(p1, p2, p3, p4, uv1, uv2, uv3, uv4, col);
 
     if (push_texture_id)
-        PopTextureID();
+        PopTexture();
 }
 
-void ImDrawList::AddImageRounded(ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col, float rounding, ImDrawFlags flags)
+void ImDrawList::AddImageRounded(ImTextureRef tex_ref, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col, float rounding, ImDrawFlags flags)
 {
     if ((col & IM_COL32_A_MASK) == 0)
         return;
@@ -1764,13 +1764,13 @@ void ImDrawList::AddImageRounded(ImTextureID user_texture_id, const ImVec2& p_mi
     flags = FixRectCornerFlags(flags);
     if (rounding < 0.5f || (flags & ImDrawFlags_RoundCornersMask_) == ImDrawFlags_RoundCornersNone)
     {
-        AddImage(user_texture_id, p_min, p_max, uv_min, uv_max, col);
+        AddImage(tex_ref, p_min, p_max, uv_min, uv_max, col);
         return;
     }
 
-    const bool push_texture_id = user_texture_id != _CmdHeader.TextureId;
+    const bool push_texture_id = tex_ref != _CmdHeader.TexRef;
     if (push_texture_id)
-        PushTextureID(user_texture_id);
+        PushTexture(tex_ref);
 
     int vert_start_idx = VtxBuffer.Size;
     PathRect(p_min, p_max, rounding, flags);
@@ -1779,7 +1779,7 @@ void ImDrawList::AddImageRounded(ImTextureID user_texture_id, const ImVec2& p_mi
     ImGui::ShadeVertsLinearUV(this, vert_start_idx, vert_end_idx, p_min, p_max, uv_min, uv_max, true);
 
     if (push_texture_id)
-        PopTextureID();
+        PopTexture();
 }
 
 //-----------------------------------------------------------------------------
@@ -2614,7 +2614,7 @@ ImFontAtlas::ImFontAtlas()
     TexMaxWidth = 8192;
     TexMaxHeight = 8192;
     RendererHasTextures = false; // Assumed false by default, as apps can call e.g Atlas::Build() after backend init and before ImGui can update.
-    TexID._TexData = NULL;
+    TexRef._TexData = NULL;
     TexNextUniqueID = 1;
     FontNextUniqueID = 1;
     Builder = NULL;
@@ -2768,7 +2768,7 @@ void ImFontAtlasUpdateNewFrame(ImFontAtlas* atlas, int frame_count)
 
         if (tex->Status == ImTextureStatus_Destroyed)
         {
-            IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == NULL);
+            IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == NULL);
             if (tex->WantDestroyNextFrame)
                 remove_from_list = true; // Destroy was scheduled by us
             else
@@ -2789,7 +2789,7 @@ void ImFontAtlasUpdateNewFrame(ImFontAtlas* atlas, int frame_count)
         }
 
         // If a texture has never reached the backend, they don't need to know about it.
-        if (tex->Status == ImTextureStatus_WantDestroy && tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == NULL)
+        if (tex->Status == ImTextureStatus_WantDestroy && tex->TexID == ImTextureID_Invalid && tex->BackendUserData == NULL)
             remove_from_list = true;
 
         // Destroy and remove
@@ -3846,7 +3846,7 @@ void ImFontAtlasRemoveDrawListSharedData(ImFontAtlas* atlas, ImDrawListSharedDat
 }
 
 // Update texture identifier in all active draw lists
-void ImFontAtlasUpdateDrawListsTextures(ImFontAtlas* atlas, ImTextureID old_tex, ImTextureID new_tex)
+void ImFontAtlasUpdateDrawListsTextures(ImFontAtlas* atlas, ImTextureRef old_tex, ImTextureRef new_tex)
 {
     for (ImDrawListSharedData* shared_data : atlas->DrawListSharedDatas)
         for (ImDrawList* draw_list : shared_data->DrawLists)
@@ -3854,11 +3854,11 @@ void ImFontAtlasUpdateDrawListsTextures(ImFontAtlas* atlas, ImTextureID old_tex,
             // Replace in command-buffer
             // (there is not need to replace in ImDrawListSplitter: current channel is in ImDrawList's CmdBuffer[],
             //  other channels will be on SetCurrentChannel() which already needs to compare CmdHeader anyhow)
-            if (draw_list->CmdBuffer.Size > 0 && draw_list->_CmdHeader.TextureId == old_tex)
-                draw_list->_SetTextureID(new_tex);
+            if (draw_list->CmdBuffer.Size > 0 && draw_list->_CmdHeader.TexRef == old_tex)
+                draw_list->_SetTextureRef(new_tex);
 
             // Replace in stack
-            for (ImTextureID& stacked_tex : draw_list->_TextureIdStack)
+            for (ImTextureRef& stacked_tex : draw_list->_TextureStack)
                 if (stacked_tex == old_tex)
                     stacked_tex = new_tex;
         }
@@ -3878,13 +3878,13 @@ void ImFontAtlasUpdateDrawListsSharedData(ImFontAtlas* atlas)
 // Set current texture. This is mostly called from AddTexture() + to handle a failed resize.
 static void ImFontAtlasBuildSetTexture(ImFontAtlas* atlas, ImTextureData* tex)
 {
-    ImTextureID old_tex_id = atlas->TexID;
+    ImTextureRef old_tex_ref = atlas->TexRef;
     atlas->TexData = tex;
     atlas->TexUvScale = ImVec2(1.0f / tex->Width, 1.0f / tex->Height);
-    atlas->TexID._TexData = tex;
-    //atlas->TexID._TexUserID = tex->TexUserID; // <-- We intentionally don't do that and leave it 0, to allow late upload.
-    ImTextureID new_tex_id = atlas->TexID;
-    ImFontAtlasUpdateDrawListsTextures(atlas, old_tex_id, new_tex_id);
+    atlas->TexRef._TexData = tex;
+    //atlas->TexRef._TexID = tex->TexID; // <-- We intentionally don't do that and leave it 0, to allow late upload.
+    ImTextureRef new_tex_id = atlas->TexRef;
+    ImFontAtlasUpdateDrawListsTextures(atlas, old_tex_ref, new_tex_id);
 }
 
 // Create a new texture, discard previous one
@@ -3897,7 +3897,7 @@ ImTextureData* ImFontAtlasBuildAddTexture(ImFontAtlas* atlas, int w, int h)
     /*if (old_tex != NULL && old_tex->Status == ImTextureStatus_WantCreate)
     {
         // Reuse texture not yet used by backend.
-        IM_ASSERT(old_tex->TexUserID == ImTextureUserID_Invalid && old_tex->BackendUserData == NULL);
+        IM_ASSERT(old_tex->TexID == ImTextureID_Invalid && old_tex->BackendUserData == NULL);
         old_tex->DestroyPixels();
         old_tex->Updates.clear();
         new_tex = old_tex;
@@ -4404,16 +4404,16 @@ void ImFontAtlasDebugLogTextureRequests(ImFontAtlas* atlas)
         if (tex->Status == ImTextureStatus_WantCreate)
             IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: create %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
         else if (tex->Status == ImTextureStatus_WantDestroy)
-            IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: destroy %dx%d, texid=0x%" IM_PRIX64 ", backend_data=%p\n", tex->UniqueID, tex->Width, tex->Height, tex->TexUserID, tex->BackendUserData);
+            IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: destroy %dx%d, texid=0x%" IM_PRIX64 ", backend_data=%p\n", tex->UniqueID, tex->Width, tex->Height, tex->TexID, tex->BackendUserData);
         else if (tex->Status == ImTextureStatus_WantUpdates)
         {
-            IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: update %d regions, texid=0x%" IM_PRIX64 ", backend_data=0x%" IM_PRIX64 "\n", tex->UniqueID, tex->Updates.Size, tex->TexUserID, (ImU64)(intptr_t)tex->BackendUserData);
+            IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: update %d regions, texid=0x%" IM_PRIX64 ", backend_data=0x%" IM_PRIX64 "\n", tex->UniqueID, tex->Updates.Size, tex->TexID, (ImU64)(intptr_t)tex->BackendUserData);
             for (const ImTextureRect& r : tex->Updates)
             {
                 IM_UNUSED(r);
                 IM_ASSERT(r.x >= 0 && r.y >= 0);
                 IM_ASSERT(r.x + r.w <= tex->Width && r.y + r.h <= tex->Height); // In theory should subtract PackPadding but it's currently part of atlas and mid-frame change would wreck assert.
-                //IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: update (% 4d..%-4d)->(% 4d..%-4d), texid=0x%" IM_PRIX64 ", backend_data=0x%" IM_PRIX64 "\n", tex->UniqueID, r.x, r.y, r.x + r.w, r.y + r.h, tex->TexUserID, (ImU64)(intptr_t)tex->BackendUserData);
+                //IMGUI_DEBUG_LOG_FONT("[font] Texture #%03d: update (% 4d..%-4d)->(% 4d..%-4d), texid=0x%" IM_PRIX64 ", backend_data=0x%" IM_PRIX64 "\n", tex->UniqueID, r.x, r.y, r.x + r.w, r.y + r.h, tex->TexID, (ImU64)(intptr_t)tex->BackendUserData);
             }
         }
     }

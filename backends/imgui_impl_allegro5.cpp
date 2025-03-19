@@ -2,7 +2,7 @@
 // (Info: Allegro 5 is a cross-platform general purpose library for handling windows, inputs, graphics, etc.)
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'ALLEGRO_BITMAP*' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'ALLEGRO_BITMAP*' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Platform: Keyboard support. Since 1.87 we are using the io.AddKeyEvent() function. Pass ImGuiKey values to all key functions e.g. ImGui::IsKeyPressed(ImGuiKey_Space). [Legacy ALLEGRO_KEY_* values are obsolete since 1.87 and not supported since 1.91.5]
 //  [X] Platform: Clipboard support (from Allegro 5.1.12).
@@ -219,7 +219,7 @@ void ImGui_ImplAllegro5_RenderDrawData(ImDrawData* draw_data)
                     continue;
 
                 // Apply scissor/clipping rectangle, Draw
-                ALLEGRO_BITMAP* texture = (ALLEGRO_BITMAP*)pcmd->GetTexUserID();
+                ALLEGRO_BITMAP* texture = (ALLEGRO_BITMAP*)pcmd->GetTexID();
                 al_set_clipping_rectangle(clip_min.x, clip_min.y, clip_max.x - clip_min.x, clip_max.y - clip_min.y);
 #if ALLEGRO_HAS_DRAW_INDEXED_PRIM
                 al_draw_indexed_prim(&vertices[0], bd->VertexDecl, texture, &indices[pcmd->IdxOffset], pcmd->ElemCount, ALLEGRO_PRIM_TRIANGLE_LIST);
@@ -256,7 +256,7 @@ void ImGui_ImplAllegro5_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
 
         // Create texture
@@ -282,7 +282,7 @@ void ImGui_ImplAllegro5_UpdateTexture(ImTextureData* tex)
         IM_ASSERT(gpu_bitmap != nullptr && "Backend failed to create texture!");
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)gpu_bitmap);
+        tex->SetTexID((ImTextureID)(intptr_t)gpu_bitmap);
         tex->Status = ImTextureStatus_OK;
     }
     else if (tex->Status == ImTextureStatus_WantUpdates)
@@ -290,7 +290,7 @@ void ImGui_ImplAllegro5_UpdateTexture(ImTextureData* tex)
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
         ImTextureRect r_bb = tex->UpdateRect; // Bounding box encompassing all individual updates
-        ALLEGRO_BITMAP* gpu_bitmap = (ALLEGRO_BITMAP*)(intptr_t)tex->TexUserID;
+        ALLEGRO_BITMAP* gpu_bitmap = (ALLEGRO_BITMAP*)(intptr_t)tex->TexID;
         ALLEGRO_LOCKED_REGION* locked_region = al_lock_bitmap_region(gpu_bitmap, r_bb.x, r_bb.y, r_bb.w, r_bb.h, al_get_bitmap_format(gpu_bitmap), ALLEGRO_LOCK_WRITEONLY);
         IM_ASSERT(locked_region && "Backend failed to update texture!");
         for (ImTextureRect& r : tex->Updates)
@@ -302,12 +302,12 @@ void ImGui_ImplAllegro5_UpdateTexture(ImTextureData* tex)
     }
     else if (tex->Status == ImTextureStatus_WantDestroy)
     {
-        ALLEGRO_BITMAP* backend_tex = (ALLEGRO_BITMAP*)(intptr_t)tex->TexUserID;
+        ALLEGRO_BITMAP* backend_tex = (ALLEGRO_BITMAP*)(intptr_t)tex->TexID;
         if (backend_tex)
             al_destroy_bitmap(backend_tex);
 
         // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-        tex->SetTexUserID(ImTextureUserID_Invalid);
+        tex->SetTexID(ImTextureID_Invalid);
         tex->Status = ImTextureStatus_Destroyed;
     }
 }

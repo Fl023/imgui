@@ -2,7 +2,7 @@
 // This needs to be used along with a Platform Backend (e.g. Win32)
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'D3D12_GPU_DESCRIPTOR_HANDLE' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'D3D12_GPU_DESCRIPTOR_HANDLE' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: Expose selected render state for draw callbacks to use. Access in '(ImGui_ImplXXXX_RenderState*)GetPlatformIO().Renderer_RenderState'.
@@ -386,7 +386,7 @@ void ImGui_ImplDX12_RenderDrawData(ImDrawData* draw_data, ID3D12GraphicsCommandL
 
                 // Bind texture, Draw
                 D3D12_GPU_DESCRIPTOR_HANDLE texture_handle = {};
-                texture_handle.ptr = (UINT64)pcmd->GetTexUserID();
+                texture_handle.ptr = (UINT64)pcmd->GetTexID();
                 command_list->SetGraphicsRootDescriptorTable(1, texture_handle);
                 command_list->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, pcmd->VtxOffset + global_vtx_offset, 0);
             }
@@ -402,7 +402,7 @@ static void ImGui_ImplDX12_DestroyTexture(ImTextureData* tex)
     ImGui_ImplDX12_Texture* backend_tex = (ImGui_ImplDX12_Texture*)tex->BackendUserData;
     if (backend_tex == nullptr)
         return;
-    IM_ASSERT(backend_tex->hFontSrvGpuDescHandle.ptr == (UINT64)tex->TexUserID);
+    IM_ASSERT(backend_tex->hFontSrvGpuDescHandle.ptr == (UINT64)tex->TexID);
     ImGui_ImplDX12_Data* bd = ImGui_ImplDX12_GetBackendData();
     bd->InitInfo.SrvDescriptorFreeFn(&bd->InitInfo, backend_tex->hFontSrvCpuDescHandle, backend_tex->hFontSrvGpuDescHandle);
     SafeRelease(backend_tex->pTextureResource);
@@ -411,7 +411,7 @@ static void ImGui_ImplDX12_DestroyTexture(ImTextureData* tex)
     IM_DELETE(backend_tex);
 
     // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-    tex->SetTexUserID(ImTextureUserID_Invalid);
+    tex->SetTexID(ImTextureID_Invalid);
     tex->BackendUserData = nullptr;
     tex->Status = ImTextureStatus_Destroyed;
 }
@@ -425,7 +425,7 @@ void ImGui_ImplDX12_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         ImGui_ImplDX12_Texture* backend_tex = IM_NEW(ImGui_ImplDX12_Texture)();
         bd->InitInfo.SrvDescriptorAllocFn(&bd->InitInfo, &backend_tex->hFontSrvCpuDescHandle, &backend_tex->hFontSrvGpuDescHandle); // Allocate a desctriptor handle
@@ -466,7 +466,7 @@ void ImGui_ImplDX12_UpdateTexture(ImTextureData* tex)
         backend_tex->pTextureResource = pTexture;
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)backend_tex->hFontSrvGpuDescHandle.ptr);
+        tex->SetTexID((ImTextureID)backend_tex->hFontSrvGpuDescHandle.ptr);
         tex->BackendUserData = backend_tex;
         need_barrier_before_copy = false; // Because this is a newly-created texture it will be in D3D12_RESOURCE_STATE_COMMON and thus we don't need a barrier
         // We don't set tex->Status to ImTextureStatus_OK to let the code fallthrough below.

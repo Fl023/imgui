@@ -2,7 +2,7 @@
 // This needs to be used along with a Platform Backend (e.g. GLFW, SDL, Win32, custom..)
 
 // Implemented features:
-//  [!] Renderer: User texture binding. Use 'VkDescriptorSet' as texture identifier. Call ImGui_ImplVulkan_AddTexture() to register one. Read the FAQ about ImTextureID/ImTextureUserID + https://github.com/ocornut/imgui/pull/914 for discussions.
+//  [!] Renderer: User texture binding. Use 'VkDescriptorSet' as texture identifier. Call ImGui_ImplVulkan_AddTexture() to register one. Read the FAQ about ImTextureID/ImTextureRef + https://github.com/ocornut/imgui/pull/914 for discussions.
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: Expose selected render state for draw callbacks to use. Access in '(ImGui_ImplXXXX_RenderState*)GetPlatformIO().Renderer_RenderState'.
@@ -645,7 +645,7 @@ void ImGui_ImplVulkan_RenderDrawData(ImDrawData* draw_data, VkCommandBuffer comm
                 vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
                 // Bind DescriptorSet with font or user texture
-                VkDescriptorSet desc_set = (VkDescriptorSet)pcmd->GetTexUserID();
+                VkDescriptorSet desc_set = (VkDescriptorSet)pcmd->GetTexID();
                 vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bd->PipelineLayout, 0, 1, &desc_set, 0, nullptr);
 
                 // Draw
@@ -673,7 +673,7 @@ static void ImGui_ImplVulkan_DestroyTexture(ImTextureData* tex)
     ImGui_ImplVulkan_Texture* backend_tex = (ImGui_ImplVulkan_Texture*)tex->BackendUserData;
     if (backend_tex == nullptr)
         return;
-    IM_ASSERT(backend_tex->DescriptorSet == (VkDescriptorSet)tex->TexUserID);
+    IM_ASSERT(backend_tex->DescriptorSet == (VkDescriptorSet)tex->TexID);
     ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
     ImGui_ImplVulkan_InitInfo* v = &bd->VulkanInitInfo;
     ImGui_ImplVulkan_RemoveTexture(backend_tex->DescriptorSet);
@@ -683,7 +683,7 @@ static void ImGui_ImplVulkan_DestroyTexture(ImTextureData* tex)
     IM_DELETE(backend_tex);
 
     // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-    tex->SetTexUserID(ImTextureUserID_Invalid);
+    tex->SetTexID(ImTextureID_Invalid);
     tex->BackendUserData = nullptr;
     tex->Status = ImTextureStatus_Destroyed;
 }
@@ -700,7 +700,7 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         ImGui_ImplVulkan_Texture* backend_tex = IM_NEW(ImGui_ImplVulkan_Texture)();
 
@@ -752,7 +752,7 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
         backend_tex->DescriptorSet = ImGui_ImplVulkan_AddTexture(bd->TexSampler, backend_tex->ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)backend_tex->DescriptorSet);
+        tex->SetTexID((ImTextureID)backend_tex->DescriptorSet);
         tex->BackendUserData = backend_tex;
     }
 

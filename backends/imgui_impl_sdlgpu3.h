@@ -2,7 +2,7 @@
 // This needs to be used along with the SDL3 Platform Backend
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'SDL_GPUTextureSamplerBinding*' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'SDL_GPUTextureSamplerBinding*' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) with 16-bit indices.
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 // Missing features:

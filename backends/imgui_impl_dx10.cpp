@@ -2,7 +2,7 @@
 // This needs to be used along with a Platform Backend (e.g. Win32)
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'ID3D10ShaderResourceView*' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'ID3D10ShaderResourceView*' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: Multi-viewport support (multiple windows). Enable with 'io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable'.
@@ -291,7 +291,7 @@ void ImGui_ImplDX10_RenderDrawData(ImDrawData* draw_data)
                 device->RSSetScissorRects(1, &r);
 
                 // Bind texture, Draw
-                ID3D10ShaderResourceView* texture_srv = (ID3D10ShaderResourceView*)pcmd->GetTexUserID();
+                ID3D10ShaderResourceView* texture_srv = (ID3D10ShaderResourceView*)pcmd->GetTexID();
                 device->PSSetShaderResources(0, 1, &texture_srv);
                 device->DrawIndexed(pcmd->ElemCount, pcmd->IdxOffset + global_idx_offset, pcmd->VtxOffset + global_vtx_offset);
             }
@@ -326,7 +326,7 @@ void ImGui_ImplDX10_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         unsigned int* pixels = (unsigned int*)tex->GetPixels();
         ImGui_ImplDX10_Texture* backend_tex = IM_NEW(ImGui_ImplDX10_Texture)();
@@ -362,7 +362,7 @@ void ImGui_ImplDX10_UpdateTexture(ImTextureData* tex)
         IM_ASSERT(backend_tex->pTextureView != nullptr && "Backend failed to create texture!");
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)backend_tex->pTextureView);
+        tex->SetTexID((ImTextureID)(intptr_t)backend_tex->pTextureView);
         tex->BackendUserData = backend_tex;
         tex->Status = ImTextureStatus_OK;
     }
@@ -371,7 +371,7 @@ void ImGui_ImplDX10_UpdateTexture(ImTextureData* tex)
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
         ImGui_ImplDX10_Texture* backend_tex = (ImGui_ImplDX10_Texture*)tex->BackendUserData;
-        IM_ASSERT(backend_tex->pTextureView == (ID3D10ShaderResourceView*)(intptr_t)tex->TexUserID);
+        IM_ASSERT(backend_tex->pTextureView == (ID3D10ShaderResourceView*)(intptr_t)tex->TexID);
         for (ImTextureRect& r : tex->Updates)
         {
             D3D10_BOX box = { (UINT)r.x, (UINT)r.y, (UINT)0, (UINT)(r.x + r.w), (UINT)(r.y + r.h), (UINT)1 };
@@ -384,13 +384,13 @@ void ImGui_ImplDX10_UpdateTexture(ImTextureData* tex)
         ImGui_ImplDX10_Texture* backend_tex = (ImGui_ImplDX10_Texture*)tex->BackendUserData;
         if (backend_tex == nullptr)
             return;
-        IM_ASSERT(backend_tex->pTextureView == (ID3D10ShaderResourceView*)(intptr_t)tex->TexUserID);
+        IM_ASSERT(backend_tex->pTextureView == (ID3D10ShaderResourceView*)(intptr_t)tex->TexID);
         backend_tex->pTexture->Release();
         backend_tex->pTextureView->Release();
         IM_DELETE(backend_tex);
 
         // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-        tex->SetTexUserID(ImTextureUserID_Invalid);
+        tex->SetTexID(ImTextureID_Invalid);
         tex->BackendUserData = nullptr;
         tex->Status = ImTextureStatus_Destroyed;
     }

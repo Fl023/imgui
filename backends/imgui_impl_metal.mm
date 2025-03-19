@@ -2,7 +2,7 @@
 // This needs to be used along with a Platform Backend (e.g. OSX)
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'MTLTexture' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'MTLTexture' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: Multi-viewport support (multiple windows). Enable with 'io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable'.
@@ -314,7 +314,7 @@ void ImGui_ImplMetal_RenderDrawData(ImDrawData* drawData, id<MTLCommandBuffer> c
                 [commandEncoder setScissorRect:scissorRect];
 
                 // Bind texture, Draw
-                if (ImTextureUserID tex_id = pcmd->GetTexUserID())
+                if (ImTextureID tex_id = pcmd->GetTexID())
                     [commandEncoder setFragmentTexture:(__bridge id<MTLTexture>)(void*)(intptr_t)(tex_id) atIndex:0];
 
                 [commandEncoder setVertexBufferOffset:(vertexBufferOffset + pcmd->VtxOffset * sizeof(ImDrawVert)) atIndex:0];
@@ -348,11 +348,11 @@ static void ImGui_ImplMetal_DestroyTexture(ImTextureData* tex)
     MetalTexture* backend_tex = (__bridge_transfer MetalTexture*)(tex->BackendUserData);
     if (backend_tex == nullptr)
         return;
-    IM_ASSERT(backend_tex.metalTexture == (__bridge id<MTLTexture>)(void*)(intptr_t)tex->TexUserID);
+    IM_ASSERT(backend_tex.metalTexture == (__bridge id<MTLTexture>)(void*)(intptr_t)tex->TexID);
     backend_tex.metalTexture = nil;
 
     // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-    tex->SetTexUserID(ImTextureUserID_Invalid);
+    tex->SetTexID(ImTextureID_Invalid);
     tex->BackendUserData = nullptr;
     tex->Status = ImTextureStatus_Destroyed;
 }
@@ -364,7 +364,7 @@ void ImGui_ImplMetal_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
 
         // We are retrieving and uploading the font atlas as a 4-channels RGBA texture here.
@@ -386,7 +386,7 @@ void ImGui_ImplMetal_UpdateTexture(ImTextureData* tex)
         MetalTexture* backend_tex = [[MetalTexture alloc] initWithTexture:texture];
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)texture);
+        tex->SetTexID((ImTextureID)(intptr_t)texture);
         tex->BackendUserData = (__bridge_retained void*)(backend_tex);
         tex->Status = ImTextureStatus_OK;
     }

@@ -10,7 +10,7 @@
 // and it might be difficult to step out of those boundaries.
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'SDL_Texture*' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'SDL_Texture*' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: Expose selected render state for draw callbacks to use. Access in '(ImGui_ImplXXXX_RenderState*)GetPlatformIO().Renderer_RenderState'.
@@ -208,7 +208,7 @@ void ImGui_ImplSDLRenderer2_RenderDrawData(ImDrawData* draw_data, SDL_Renderer* 
 #endif
 
                 // Bind texture, Draw
-                SDL_Texture* tex = (SDL_Texture*)pcmd->GetTexUserID();
+                SDL_Texture* tex = (SDL_Texture*)pcmd->GetTexID();
                 SDL_RenderGeometryRaw(renderer, tex,
                     xy, (int)sizeof(ImDrawVert),
                     color, (int)sizeof(ImDrawVert),
@@ -233,7 +233,7 @@ void ImGui_ImplSDLRenderer2_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
 
         // Create texture
@@ -245,14 +245,14 @@ void ImGui_ImplSDLRenderer2_UpdateTexture(ImTextureData* tex)
         SDL_SetTextureScaleMode(sdl_texture, SDL_ScaleModeLinear);
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)sdl_texture);
+        tex->SetTexID((ImTextureID)(intptr_t)sdl_texture);
         tex->Status = ImTextureStatus_OK;
     }
     else if (tex->Status == ImTextureStatus_WantUpdates)
     {
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
-        SDL_Texture* sdl_texture = (SDL_Texture*)(intptr_t)tex->TexUserID;
+        SDL_Texture* sdl_texture = (SDL_Texture*)(intptr_t)tex->TexID;
         for (ImTextureRect& r : tex->Updates)
         {
             SDL_Rect sdl_r = { r.x, r.y, r.w, r.h };
@@ -262,13 +262,13 @@ void ImGui_ImplSDLRenderer2_UpdateTexture(ImTextureData* tex)
     }
     else if (tex->Status == ImTextureStatus_WantDestroy)
     {
-        SDL_Texture* sdl_texture = (SDL_Texture*)(intptr_t)tex->TexUserID;
+        SDL_Texture* sdl_texture = (SDL_Texture*)(intptr_t)tex->TexID;
         if (sdl_texture == nullptr)
             return;
         SDL_DestroyTexture(sdl_texture);
 
         // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-        tex->SetTexUserID(ImTextureUserID_Invalid);
+        tex->SetTexID(ImTextureID_Invalid);
         tex->Status = ImTextureStatus_Destroyed;
     }
 }

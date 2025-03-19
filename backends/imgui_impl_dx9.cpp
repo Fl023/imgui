@@ -2,7 +2,7 @@
 // This needs to be used along with a Platform Backend (e.g. Win32)
 
 // Implemented features:
-//  [X] Renderer: User texture binding. Use 'LPDIRECT3DTEXTURE9' as texture identifier. Read the FAQ about ImTextureID/ImTextureUserID!
+//  [X] Renderer: User texture binding. Use 'LPDIRECT3DTEXTURE9' as texture identifier. Read the FAQ about ImTextureID/ImTextureRef!
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
 //  [X] Renderer: IMGUI_USE_BGRA_PACKED_COLOR support, as this is the optimal color encoding for DirectX9.
@@ -287,7 +287,7 @@ void ImGui_ImplDX9_RenderDrawData(ImDrawData* draw_data)
                 device->SetScissorRect(&r);
 
                 // Bind texture, Draw
-                const LPDIRECT3DTEXTURE9 texture = (LPDIRECT3DTEXTURE9)pcmd->GetTexUserID();
+                const LPDIRECT3DTEXTURE9 texture = (LPDIRECT3DTEXTURE9)pcmd->GetTexID();
                 device->SetTexture(0, texture);
                 device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, pcmd->VtxOffset + global_vtx_offset, 0, (UINT)draw_list->VtxBuffer.Size, pcmd->IdxOffset + global_idx_offset, pcmd->ElemCount / 3);
             }
@@ -397,7 +397,7 @@ void ImGui_ImplDX9_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexUserID == ImTextureUserID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         LPDIRECT3DTEXTURE9 dx_tex = nullptr;
         HRESULT hr = bd->pd3dDevice->CreateTexture(tex->Width, tex->Height, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &dx_tex, nullptr);
@@ -415,14 +415,14 @@ void ImGui_ImplDX9_UpdateTexture(ImTextureData* tex)
         }
 
         // Store identifiers
-        tex->SetTexUserID((ImTextureUserID)(intptr_t)dx_tex);
+        tex->SetTexID((ImTextureID)(intptr_t)dx_tex);
         tex->Status = ImTextureStatus_OK;
     }
     else if (tex->Status == ImTextureStatus_WantUpdates)
     {
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
-        LPDIRECT3DTEXTURE9 backend_tex = (LPDIRECT3DTEXTURE9)(intptr_t)tex->TexUserID;
+        LPDIRECT3DTEXTURE9 backend_tex = (LPDIRECT3DTEXTURE9)(intptr_t)tex->TexID;
         for (ImTextureRect& r : tex->Updates)
         {
             RECT tex_rect = { (LONG)r.x, (LONG)r.y, (LONG)(r.x + r.w), (LONG)(r.y + r.h) };
@@ -438,14 +438,14 @@ void ImGui_ImplDX9_UpdateTexture(ImTextureData* tex)
     }
     else if (tex->Status == ImTextureStatus_WantDestroy)
     {
-        LPDIRECT3DTEXTURE9 backend_tex = (LPDIRECT3DTEXTURE9)tex->TexUserID;
+        LPDIRECT3DTEXTURE9 backend_tex = (LPDIRECT3DTEXTURE9)tex->TexID;
         if (backend_tex == nullptr)
             return;
-        IM_ASSERT(tex->TexUserID == (ImTextureUserID)(intptr_t)backend_tex);
+        IM_ASSERT(tex->TexID == (ImTextureID)(intptr_t)backend_tex);
         backend_tex->Release();
 
         // Clear identifiers and mark as destroyed (in order to allow e.g. calling InvalidateDeviceObjects while running)
-        tex->SetTexUserID(ImTextureUserID_Invalid);
+        tex->SetTexID(ImTextureID_Invalid);
         tex->Status = ImTextureStatus_Destroyed;
     }
 }
